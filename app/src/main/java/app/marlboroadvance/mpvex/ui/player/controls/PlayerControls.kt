@@ -1014,7 +1014,7 @@ fun PlayerControls(
                 if (isPortrait) {
                   bottom.linkTo(playerPauseButton.top, spacing.small)
                 } else {
-                  bottom.linkTo(parent.bottom, spacing.large)
+                  bottom.linkTo(parent.bottom, spacing.extraSmall)
                 }
                 start.linkTo(parent.start, spacing.medium)
                 end.linkTo(parent.end, spacing.medium)
