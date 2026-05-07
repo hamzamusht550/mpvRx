@@ -135,8 +135,10 @@ class MainActivity : ComponentActivity() {
 
     PermissionUtils.setMediaAccessLauncher(mediaAccessLauncher)
 
-    // Register proxy lifecycle observer for network streaming
-    lifecycle.addObserver(app.gyrolet.mpvrx.ui.browser.networkstreaming.proxy.ProxyLifecycleObserver())
+    val networkStreamingEnabled = appearancePreferences.showNetworkTab.get()
+    if (networkStreamingEnabled) {
+      lifecycle.addObserver(app.gyrolet.mpvrx.ui.browser.networkstreaming.proxy.ProxyLifecycleObserver())
+    }
 
     setContent {
       // Set up theme and edge-to-edge display
@@ -151,8 +153,10 @@ class MainActivity : ComponentActivity() {
       )
 
       // Auto-connect to saved network connections
-      LaunchedEffect(Unit) {
-        autoConnectToNetworks()
+      LaunchedEffect(networkStreamingEnabled) {
+        if (networkStreamingEnabled) {
+          autoConnectToNetworks()
+        }
       }
 
       MpvrxTheme {

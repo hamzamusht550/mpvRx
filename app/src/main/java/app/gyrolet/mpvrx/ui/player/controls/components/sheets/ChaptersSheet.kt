@@ -2,9 +2,12 @@ package app.gyrolet.mpvrx.ui.player.controls.components.sheets
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -16,6 +19,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import app.gyrolet.mpvrx.R
+import app.gyrolet.mpvrx.presentation.components.PlayerSheet
 import app.gyrolet.mpvrx.ui.theme.spacing
 import dev.vivvvek.seeker.Segment
 import `is`.xyz.mpv.Utils
@@ -38,22 +42,24 @@ fun ChaptersSheet(
     }
   }
 
-  GenericTracksSheet(
-    chapters,
-    lazyListState = listState,
-    track = {
-      ChapterTrack(
-        it,
-        index = chapters.indexOf(it),
-        selected = currentChapter == it,
-        onClick = { onClick(it) },
-      )
-    },
-    onDismissRequest = onDismissRequest,
-    modifier =
-      modifier
-        .padding(vertical = MaterialTheme.spacing.medium),
-  )
+  PlayerSheet(onDismissRequest) {
+    Column(
+      modifier =
+        modifier
+          .padding(vertical = MaterialTheme.spacing.medium),
+    ) {
+      LazyColumn(state = listState) {
+        itemsIndexed(chapters) { index, chapter ->
+          ChapterTrack(
+            chapter = chapter,
+            index = index,
+            selected = currentChapter == chapter,
+            onClick = { onClick(chapter) },
+          )
+        }
+      }
+    }
+  }
 }
 
 @Composable

@@ -34,10 +34,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import app.gyrolet.mpvrx.R
+import app.gyrolet.mpvrx.domain.anime4k.Anime4KManager
 import app.gyrolet.mpvrx.preferences.DecoderPreferences
 import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import app.gyrolet.mpvrx.presentation.Screen
@@ -49,9 +51,7 @@ import app.gyrolet.mpvrx.ui.preferences.VulkanUtils
 import kotlinx.serialization.Serializable
 import me.zhanghai.compose.preference.ListPreference
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
-import me.zhanghai.compose.preference.SliderPreference
 import me.zhanghai.compose.preference.SwitchPreference
-import app.gyrolet.mpvrx.ui.player.InterpolationMode
 import org.koin.compose.koinInject
 
 @Serializable
@@ -291,71 +291,32 @@ object DecoderPreferencesScreen : Screen {
                   }
                 },
               )
-            }
-          }
-
-          item {
-            PreferenceSectionHeader(title = stringResource(R.string.pref_interpolation_section))
-          }
-
-          item {
-            PreferenceCard {
-              val smoothMotion by preferences.smoothMotion.collectAsState()
-              SwitchPreference(
-                value = smoothMotion,
-                onValueChange = { preferences.smoothMotion.set(it) },
-                title = { Text(stringResource(R.string.pref_interpolation_title)) },
-                summary = {
-                  Text(
-                    stringResource(R.string.pref_interpolation_summary),
-                    color = MaterialTheme.colorScheme.outline,
-                  )
-                },
-              )
 
               PreferenceDivider()
 
-              val interpolationMode by preferences.interpolationMode.collectAsState()
+              val anime4kQuality by preferences.anime4kQuality.collectAsState()
               ListPreference(
-                value = interpolationMode,
-                onValueChange = { preferences.interpolationMode.set(it) },
-                values = InterpolationMode.entries,
-                enabled = smoothMotion,
-                title = { Text(stringResource(R.string.pref_interpolation_mode_title)) },
+                value = anime4kQuality,
+                onValueChange = { preferences.anime4kQuality.set(it) },
+                values = Anime4KManager.Quality.entries,
+                valueToText = { AnnotatedString(context.getString(it.titleRes)) },
+                enabled = enableAnime4K,
+                title = { Text(stringResource(R.string.pref_anime4k_quality_title)) },
                 summary = {
                   Text(
-                    interpolationMode.displayName,
-                    color = if (smoothMotion) MaterialTheme.colorScheme.outline
-                            else MaterialTheme.colorScheme.outlineVariant,
-                  )
-                },
-              )
-
-              PreferenceDivider()
-
-              val interpolationFPSLimit by preferences.interpolationFPSLimit.collectAsState()
-              SliderPreference(
-                value = interpolationFPSLimit.toFloat(),
-                onValueChange = { preferences.interpolationFPSLimit.set(it.toInt()) },
-                sliderValue = interpolationFPSLimit.toFloat(),
-                onSliderValueChange = { preferences.interpolationFPSLimit.set(it.toInt()) },
-                valueRange = 0f..144f,
-                enabled = smoothMotion,
-                title = { Text(stringResource(R.string.pref_interpolation_fps_limit_title)) },
-                summary = {
-                  Text(
-                    if (interpolationFPSLimit == 0) {
-                      stringResource(R.string.pref_interpolation_fps_limit_auto)
-                    } else {
-                      stringResource(R.string.pref_interpolation_fps_limit_value, interpolationFPSLimit)
-                    },
-                    color = if (smoothMotion) MaterialTheme.colorScheme.outline
-                            else MaterialTheme.colorScheme.outlineVariant,
+                    stringResource(anime4kQuality.titleRes),
+                    color =
+                      if (enableAnime4K) {
+                        MaterialTheme.colorScheme.outline
+                      } else {
+                        MaterialTheme.colorScheme.outlineVariant
+                      },
                   )
                 },
               )
             }
           }
+
         }
       }
     }

@@ -29,6 +29,12 @@ class App : Application() {
   private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
   private val metadataCache: VideoMetadataCacheRepository by inject()
 
+  companion object {
+    private const val LAUNCH_SCAN_PREFS = "launch_media_scan"
+    private const val LAST_LAUNCH_SCAN_MS = "last_launch_scan_ms"
+    private const val LAUNCH_SCAN_INTERVAL_MS = 24L * 60L * 60L * 1000L
+  }
+
   override fun onCreate() {
     super.onCreate()
 
@@ -65,6 +71,11 @@ class App : Application() {
 
   private fun triggerMediaScanOnLaunch() {
     try {
+      if (!shouldRunLaunchMediaScan()) {
+        android.util.Log.d("App", "Skipped launch media scan; last scan was recent")
+        return
+      }
+
       val externalStorage = android.os.Environment.getExternalStorageDirectory()
 
       android.media.MediaScannerConnection.scanFile(
@@ -80,6 +91,17 @@ class App : Application() {
     } catch (error: Exception) {
       android.util.Log.e("App", "Failed to trigger media scan on launch", error)
     }
+  }
+
+  private fun shouldRunLaunchMediaScan(): Boolean {
+    val now = System.currentTimeMillis()
+    val prefs = getSharedPreferences(LAUNCH_SCAN_PREFS, MODE_PRIVATE)
+    val lastScan = prefs.getLong(LAST_LAUNCH_SCAN_MS, 0L)
+    if (now - lastScan < LAUNCH_SCAN_INTERVAL_MS) {
+      return false
+    }
+    prefs.edit().putLong(LAST_LAUNCH_SCAN_MS, now).apply()
+    return true
   }
 
   private fun initializeScriptEditorAssets() {

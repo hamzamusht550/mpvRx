@@ -6,6 +6,8 @@ import app.gyrolet.mpvrx.ui.icons.Icons
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -20,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import app.gyrolet.mpvrx.R
+import app.gyrolet.mpvrx.presentation.components.PlayerSheet
 import app.gyrolet.mpvrx.repository.wyzie.WyzieSubtitle
 import app.gyrolet.mpvrx.ui.theme.spacing
 import app.gyrolet.mpvrx.utils.media.MediaInfoParser
@@ -79,10 +82,8 @@ fun OnlineSubtitleSearchSheet(
     list.toImmutableList()
   }
 
-  GenericTracksSheet(
-    tracks = items,
-    onDismissRequest = onDismissRequest,
-    header = {
+  PlayerSheet(onDismissRequest) {
+    Column(modifier) {
       val keyboardController = LocalSoftwareKeyboardController.current
       val mediaInfo = remember(mediaTitle) { MediaInfoParser.parse(mediaTitle) }
       var searchQuery by remember { mutableStateOf(mediaInfo.title) }
@@ -243,53 +244,56 @@ fun OnlineSubtitleSearchSheet(
           color = MaterialTheme.colorScheme.primary
         )
       }
-    },
-    track = { item ->
-      when (item) {
-        is OnlineSubtitleItem.OnlineTrack -> {
-            WyzieSubtitleRow(
+
+      LazyColumn {
+        items(items) { item ->
+          when (item) {
+            is OnlineSubtitleItem.OnlineTrack -> {
+              WyzieSubtitleRow(
                 subtitle = item.subtitle,
                 onDownload = { onDownloadOnline(item.subtitle) },
-                modifier = Modifier.padding(horizontal = MaterialTheme.spacing.small, vertical = 2.dp)
-            )
-        }
-        is OnlineSubtitleItem.Header -> {
-            val isOnlineHeader =
-              item.title.startsWith("Online Results") || item.title.startsWith("Verified Matches")
-            Row(
-                modifier = Modifier
+                modifier = Modifier.padding(horizontal = MaterialTheme.spacing.small, vertical = 2.dp),
+              )
+            }
+            is OnlineSubtitleItem.Header -> {
+              val isOnlineHeader =
+                item.title.startsWith("Online Results") || item.title.startsWith("Verified Matches")
+              Row(
+                modifier =
+                  Modifier
                     .fillMaxWidth()
                     .then(if (isOnlineHeader) Modifier.clickable { onToggleOnlineSection() } else Modifier)
                     .padding(horizontal = MaterialTheme.spacing.medium, vertical = MaterialTheme.spacing.extraSmall),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+                horizontalArrangement = Arrangement.SpaceBetween,
+              ) {
                 Text(
-                    text = item.title,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
+                  text = item.title,
+                  style = MaterialTheme.typography.labelLarge,
+                  color = MaterialTheme.colorScheme.primary,
+                  fontWeight = FontWeight.Bold,
                 )
                 if (isOnlineHeader) {
-                    Icon(
-                        imageVector = if (isOnlineSectionExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
+                  Icon(
+                    imageVector = if (isOnlineSectionExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                  )
                 }
+              }
             }
-        }
-        OnlineSubtitleItem.Divider -> {
-            HorizontalDivider(
-              modifier = Modifier.padding(horizontal = MaterialTheme.spacing.medium, vertical = MaterialTheme.spacing.small),
-              color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
+            OnlineSubtitleItem.Divider -> {
+              HorizontalDivider(
+                modifier = Modifier.padding(horizontal = MaterialTheme.spacing.medium, vertical = MaterialTheme.spacing.small),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+              )
+            }
+          }
         }
       }
-    },
-    modifier = modifier,
-  )
+    }
+  }
 }
 
 @Composable

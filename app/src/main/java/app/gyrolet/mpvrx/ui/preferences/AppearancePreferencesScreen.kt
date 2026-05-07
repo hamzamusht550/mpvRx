@@ -91,25 +91,7 @@ object AppearancePreferencesScreen : Screen {
         val thumbnailFramePosition by browserPreferences.thumbnailFramePosition.collectAsState()
         val thumbnailCacheClearedMessage = stringResource(R.string.pref_thumbnail_cache_cleared)
 
-        LaunchedEffect(storedThumbnailMode) {
-            when (storedThumbnailMode) {
-                ThumbnailMode.OneThird -> {
-                    browserPreferences.thumbnailFramePosition.set(33f)
-                    browserPreferences.thumbnailMode.set(ThumbnailMode.FrameAtPosition)
-                }
-                ThumbnailMode.Halfway -> {
-                    browserPreferences.thumbnailFramePosition.set(50f)
-                    browserPreferences.thumbnailMode.set(ThumbnailMode.FrameAtPosition)
-                }
-                else -> Unit
-            }
-        }
-
-        val thumbnailMode =
-            when (storedThumbnailMode) {
-                ThumbnailMode.OneThird, ThumbnailMode.Halfway -> ThumbnailMode.FrameAtPosition
-                else -> storedThumbnailMode
-            }
+        val thumbnailMode = storedThumbnailMode
 
         // Determine if we're in dark mode for theme preview
         val isDarkMode = when (darkMode) {
@@ -417,7 +399,7 @@ object AppearancePreferencesScreen : Screen {
                                         pendingThumbnailMode = newMode
                                     }
                                 },
-                                values = ThumbnailMode.entries.filter { it.isSelectable },
+                                values = ThumbnailMode.entries,
                                 valueToText = { AnnotatedString(it.displayName) },
                                 title = { Text(text = stringResource(id = R.string.pref_appearance_thumbnail_generation_title)) },
                                 summary = {

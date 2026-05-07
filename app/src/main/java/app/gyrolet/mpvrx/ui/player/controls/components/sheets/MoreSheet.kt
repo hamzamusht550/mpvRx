@@ -86,7 +86,6 @@ fun MoreSheet(
   
   val enableAnime4K by decoderPreferences.enableAnime4K.collectAsState()
   val anime4kMode by decoderPreferences.anime4kMode.collectAsState()
-  val anime4kQuality by decoderPreferences.anime4kQuality.collectAsState()
   val gpuNext by decoderPreferences.gpuNext.collectAsState()
   val useVulkan by decoderPreferences.useVulkan.collectAsState()
   // Observe video dimensions reactively — avoids raw JNI calls on every recomposition
@@ -282,36 +281,6 @@ fun MoreSheet(
           }
         }
 
-        Text(
-            text = stringResource(R.string.anime4k_quality_title),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary
-        )
-        LazyRow(
-          horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.smaller),
-        ) {
-          items(Anime4KManager.Quality.entries) { quality ->
-             FilterChip(
-              label = { Text(stringResource(quality.titleRes)) },
-              selected = anime4kQuality == quality.name,
-              enabled = anime4kMode != "OFF" && !isHighRes,
-              leadingIcon = null,
-              onClick = {
-                decoderPreferences.anime4kQuality.set(quality.name)
-
-                // Apply shaders immediately (runtime change)
-                scope.launch(Dispatchers.Default) {
-                  applyAnime4KRuntimeSelection(
-                    anime4kManager = anime4kManager,
-                    mode = decoderPreferences.anime4kMode.get(),
-                    quality = quality.name,
-                    onAnime4KChanged = onAnime4KChanged,
-                  )
-                }
-              }
-            )
-          }
-        }
       }
     }
   }
@@ -322,14 +291,12 @@ private val sleepTimerPresets = listOf(15, 30, 45, 60)
 private suspend fun applyAnime4KRuntimeSelection(
   anime4kManager: Anime4KManager,
   mode: String,
-  quality: String,
+  quality: Anime4KManager.Quality,
   onAnime4KChanged: () -> Unit,
 ) {
   runCatching {
     val modeEnum = runCatching { Anime4KManager.Mode.valueOf(mode) }
       .getOrDefault(Anime4KManager.Mode.OFF)
-    val qualityEnum = runCatching { Anime4KManager.Quality.valueOf(quality) }
-      .getOrDefault(Anime4KManager.Quality.BALANCED)
 
     if (modeEnum == Anime4KManager.Mode.OFF) {
       clearAnime4KShaders()
@@ -337,7 +304,7 @@ private suspend fun applyAnime4KRuntimeSelection(
       return
     }
 
-    val selection = selectRuntimeStableAnime4K(modeEnum, qualityEnum)
+    val selection = selectRuntimeStableAnime4K(modeEnum, quality)
     if (selection.mode == Anime4KManager.Mode.OFF) {
       clearAnime4KShaders()
       onAnime4KChanged()

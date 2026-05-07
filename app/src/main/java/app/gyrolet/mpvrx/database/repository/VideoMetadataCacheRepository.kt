@@ -26,8 +26,11 @@ class VideoMetadataCacheRepository(
 ) {
   companion object {
     private const val TAG = "VideoMetadataCache"
-    private const val PARALLEL_PROCESSING_LIMIT = 16 // Process 16 videos simultaneously for faster extraction
+    private const val PARALLEL_PROCESSING_LIMIT = 4
     private const val CACHE_VALIDITY_DAYS = 30L
+    private const val MAINTENANCE_PREFS = "video_metadata_cache"
+    private const val LAST_MAINTENANCE_MS = "last_maintenance_ms"
+    private const val MAINTENANCE_INTERVAL_MS = 7L * 24L * 60L * 60L * 1000L
   }
 
   private fun shouldRefreshCachedMetadata(
@@ -285,23 +288,15 @@ class VideoMetadataCacheRepository(
 
       Log.d(TAG, "Validating ${cachedPaths.size} cached entries...")
 
-      val existingPaths = cachedPaths.filter { path ->
+      val stalePaths = cachedPaths.filterNot { path ->
         File(path).exists()
       }
 
-      val staleCount = cachedPaths.size - existingPaths.size
-      if (staleCount > 0) {
-        // Delete entries for non-existent files
-        if (existingPaths.isNotEmpty()) {
-          // SQLite has a limit on IN clause size, so chunk if needed
-          existingPaths.chunked(999).forEach { chunk ->
-            dao.deleteStaleEntries(chunk)
-          }
-        } else {
-          // All cached files are gone, clear everything
-          dao.clearAll()
+      if (stalePaths.isNotEmpty()) {
+        stalePaths.chunked(999).forEach { chunk ->
+          dao.deleteByPaths(chunk)
         }
-        Log.d(TAG, "Removed $staleCount stale cache entries (deleted/moved/renamed videos)")
+        Log.d(TAG, "Removed ${stalePaths.size} stale cache entries (deleted/moved/renamed videos)")
       } else {
         Log.d(TAG, "No stale entries found")
       }
@@ -354,10 +349,18 @@ class VideoMetadataCacheRepository(
    * - Clear old entries (30+ days)
    * Call this periodically (e.g., on app start)
    */
-  suspend fun performMaintenance() {
+  suspend fun performMaintenance(force: Boolean = false) {
     withContext(Dispatchers.IO) {
+      val now = System.currentTimeMillis()
+      val prefs = context.getSharedPreferences(MAINTENANCE_PREFS, Context.MODE_PRIVATE)
+      val lastMaintenance = prefs.getLong(LAST_MAINTENANCE_MS, 0L)
+      if (!force && now - lastMaintenance < MAINTENANCE_INTERVAL_MS) {
+        Log.d(TAG, "Skipping cache maintenance; last run was recent")
+        return@withContext
+      }
+
       Log.d(TAG, "Starting cache maintenance...")
-      val startTime = System.currentTimeMillis()
+      val startTime = now
 
       // Step 1: Remove stale entries
       invalidateStaleEntries()
@@ -367,6 +370,7 @@ class VideoMetadataCacheRepository(
 
       val duration = System.currentTimeMillis() - startTime
       val stats = getCacheStats()
+      prefs.edit().putLong(LAST_MAINTENANCE_MS, System.currentTimeMillis()).apply()
       Log.d(
         TAG,
         "Cache maintenance completed in ${duration}ms. " +

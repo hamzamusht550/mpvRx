@@ -212,14 +212,6 @@
   <string name="pref_decoder_vulkan_not_supported">Not supported (requires Android 13+ with Vulkan 1.3)</string>
   <string name="pref_decoder_yuv420p_title">Use YUV420P pixel format</string>
   <string name="pref_decoder_yuv420p_summary">May fix black screens on some video codecs, can also improve performance at the cost of quality</string>
-  <!-- Frame Interpolation -->
-  <string name="pref_interpolation_section">Frame Interpolation</string>
-  <string name="pref_interpolation_title">Smooth Motion (Frame Interpolation)</string>
-  <string name="pref_interpolation_summary">Generates intermediate frames to make motion smoother. Best for 24fps content on 60Hz+ displays.</string>
-  <string name="pref_interpolation_mode_title">Interpolation Algorithm</string>
-  <string name="pref_interpolation_fps_limit_title">Target FPS</string>
-  <string name="pref_interpolation_fps_limit_auto">Auto (Match Display Refresh Rate)</string>
-  <string name="pref_interpolation_fps_limit_value">%d FPS</string>
   <string name="pref_subtitles">Subtitles</string>
   <string name="pref_subtitles_summary">Preferred languages, fonts and search</string>
   <string name="pref_subtitle_search_title">Online Subtitle Search</string>
@@ -232,7 +224,7 @@
   <string name="pref_subtitles_autoload_summary">Automatically load external subtitles with the same name.</string>
   <string name="pref_subtitles_save_location">Subtitle Save Location</string>
   <string name="pref_subtitles_search_online">Online Subtitle Search…</string>
-  <string name="pref_subtitles_subdl_languages">Subtitle Languages</string>
+  <string name="pref_subtitles_search_languages">Subtitle Languages</string>
   <string name="all_languages">All (Selective Filtering)</string>
   <string name="pref_subtitles_clear_downloads">Clear Subtitle Downloads</string>
   <string name="pref_subtitles_clear_downloads_summary">Delete all files in the current save location</string>
@@ -279,8 +271,7 @@
   <string name="pref_anime4k_cannot_use_with_gpu_next">Cannot use Anime4K with gpu-next unless Vulkan is enabled</string>
   <string name="anime4k_mode_title">Anime4K Presets</string>
   <string name="anime4k_mode_toast">Anime4K: Preset %1$s</string>
-  <string name="anime4k_quality_title">Anime4K Variants</string>
-  <string name="anime4k_quality_toast">Anime4K Variant: %1$s</string>
+  <string name="pref_anime4k_quality_title">Anime4K quality</string>
   <!-- Anime4K Modes (Renamed to Presets in UI) -->
   <string name="anime4k_mode_off">Off</string>
   <string name="anime4k_mode_a">A</string>
@@ -289,7 +280,6 @@
   <string name="anime4k_mode_a_plus">A+</string>
   <string name="anime4k_mode_b_plus">B+</string>
   <string name="anime4k_mode_c_plus">C+</string>
-  <!-- Anime4K Qualities (Renamed to Mode in UI) -->
   <string name="anime4k_quality_fast">Fast</string>
   <string name="anime4k_quality_balanced">Balanced</string>
   <string name="anime4k_quality_high">High</string>

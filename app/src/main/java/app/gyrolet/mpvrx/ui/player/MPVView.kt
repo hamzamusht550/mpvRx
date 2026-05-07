@@ -1,7 +1,6 @@
 package app.gyrolet.mpvrx.ui.player
 
 import android.content.Context
-import android.os.Build
 import android.os.Environment
 import android.util.AttributeSet
 import android.util.Log
@@ -187,8 +186,10 @@ class MPVView(
     MPVLib.setOptionString("hr-seek", if (preciseSeek) "yes" else "no")
     MPVLib.setOptionString("hr-seek-framedrop", if (preciseSeek) "no" else "yes")
 
-    // Frame interpolation (smooth motion)
-    applyFrameInterpolation()
+    MPVLib.setOptionString("video-sync", "audio")
+    MPVLib.setOptionString("display-fps", "0")
+    MPVLib.setOptionString("override-display-fps", "0")
+    MPVLib.setOptionString("interpolation", "no")
 
     // Anime4K shader initialization (MUST be in initOptions, not after file load!)
     applyAnime4KShaders(backend.vo, backend.gpuApi)
@@ -369,39 +370,6 @@ class MPVView(
   }
 
 
-  fun applyFrameInterpolation() {
-    val smoothMotionEnabled = decoderPreferences.smoothMotion.get()
-
-    val displayRefreshRate = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-      context.display.refreshRate
-    } else {
-      60f
-    }
-
-    // Keep default sync lightweight unless user explicitly enables Smooth Motion.
-    // display-resample can significantly increase GPU usage on high-refresh panels.
-    val videoSync = if (smoothMotionEnabled) "display-resample" else "audio"
-    MPVLib.setOptionString("video-sync", videoSync)
-
-    val fpsLimit = decoderPreferences.interpolationFPSLimit.get()
-    val targetFPS = when {
-      !smoothMotionEnabled -> 0f
-      fpsLimit > 0 && fpsLimit < displayRefreshRate -> fpsLimit.toFloat()
-      // Thermal-safe default cap when user leaves FPS limit as "Auto".
-      else -> minOf(displayRefreshRate, 60f)
-    }
-    MPVLib.setOptionString("display-fps", if (targetFPS > 0f) targetFPS.toString() else "0")
-    MPVLib.setOptionString("override-display-fps", if (targetFPS > 0f) targetFPS.toString() else "0")
-
-    if (smoothMotionEnabled) {
-      MPVLib.setOptionString("interpolation", "yes")
-      val mode = decoderPreferences.interpolationMode.get()
-      MPVLib.setOptionString("tscale", mode.mpvValue)
-    } else {
-      MPVLib.setOptionString("interpolation", "no")
-    }
-  }
-
   fun applyAnime4KShaders() {
     applyAnime4KShaders(
       activeVo = MPVLib.getPropertyString("vo") ?: "",
@@ -456,14 +424,7 @@ class MPVView(
         Anime4KManager.Mode.OFF
       }
 
-      val qualityStr = decoderPreferences.anime4kQuality.get()
-      val quality = try {
-        Anime4KManager.Quality.valueOf(qualityStr)
-      } catch (e: IllegalArgumentException) {
-        Anime4KManager.Quality.BALANCED
-      }
-
-      val selection = selectRuntimeStableAnime4K(mode, quality, context)
+      val selection = selectRuntimeStableAnime4K(mode, decoderPreferences.anime4kQuality.get(), context)
       selection.reason?.let { reason ->
         Log.i(TAG, "Anime4K thermal guard: $reason")
       }
@@ -503,11 +464,6 @@ class MPVView(
   private fun preferredHwdecMode(): String {
     if (!decoderPreferences.tryHWDecoding.get()) {
       return "no"
-    }
-
-    // Anime4K + shader-heavy pipelines are usually more stable with copy-back decoding.
-    if (decoderPreferences.enableAnime4K.get()) {
-      return "mediacodec-copy,mediacodec,no"
     }
 
     return "mediacodec,mediacodec-copy,no"

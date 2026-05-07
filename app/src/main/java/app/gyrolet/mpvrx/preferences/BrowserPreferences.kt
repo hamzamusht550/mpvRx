@@ -139,8 +139,6 @@ enum class ThumbnailMode {
   FirstFrame,
   FrameAtPosition,
   EmbeddedThumbnail,
-  OneThird,
-  Halfway,
   ;
 
   val displayName: String
@@ -150,10 +148,5 @@ enum class ThumbnailMode {
         FirstFrame -> "First frame"
         FrameAtPosition -> "Frame position"
         EmbeddedThumbnail -> "Embedded thumbnail"
-        OneThird -> "Frame at 33% (Legacy)"
-        Halfway -> "Frame at 50% (Legacy)"
       }
-
-  val isSelectable: Boolean
-    get() = this != OneThird && this != Halfway
 }

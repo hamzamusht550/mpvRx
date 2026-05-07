@@ -2,6 +2,24 @@
 
 These notes are written in plain English and focus on what changed for real use.
 
+## 1.3.3
+
+- Fixed Background Playback and Pip issues 
+- Anime4K should feel much smoother now. The player now uses the clean six-preset Anime4K flow from the reference app and avoids piling old shader work on top of the new preset when you switch modes.
+- Anime4K is still off by default, but when you turn it on the picker is simpler: Off, A, B, C, A+, B+, and C+.
+- Moved the Fast / Balanced / High Anime4K choice into Decoder settings, with Balanced as the default.
+- Removed frame interpolation because it added a lot of GPU load and did not add enough real value.
+- Removed the old OneThird and Halfway thumbnail choices.
+- Removed the unused old player screen path.
+- Cleaned up the track sheets so audio, subtitle, chapter, decoder, and online subtitle lists no longer depend on the old generic sheet.
+- Removed SubDL from subtitle search sources.
+- Network streaming is now opt-in instead of being enabled on a fresh install.
+- HDR and Ambient controls are no longer placed on the default player buttons, so heavy visual extras stay out of the way unless you add them yourself.
+- Turning HDR on now starts with Linear HDR by default.
+- The app now does less background media scanning and cache cleanup on startup, which should help large libraries open with less churn.
+- Added new MpvLib File with Some Optimization and Removing Deprecated Andorid Versions
+- Thumbnails are now Loaded Faster and more Precisly
+
 ## 1.3.2
 
 ### HDR — hdr-toys Pipeline

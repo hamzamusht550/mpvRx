@@ -5,8 +5,6 @@ import android.util.Log
 import app.gyrolet.mpvrx.domain.anime4k.Anime4KManager
 import `is`.xyz.mpv.MPVLib
 
-private const val MPV_SHADER_PREFIX = "~~/shaders/"
-
 internal data class Anime4KSelection(
   val mode: Anime4KManager.Mode,
   val quality: Anime4KManager.Quality,
@@ -19,40 +17,19 @@ internal fun selectThermalSafeAnime4K(
 ): Anime4KSelection {
   val width = MPVLib.getPropertyInt("video-params/w") ?: 0
   val height = MPVLib.getPropertyInt("video-params/h") ?: 0
-  val fps =
-    MPVLib.getPropertyDouble("container-fps")
-      ?: MPVLib.getPropertyDouble("estimated-vf-fps")
-      ?: 0.0
   val pixels = width.toLong() * height.toLong()
 
   if (pixels >= 3840L * 2160L) {
     return Anime4KSelection(
       mode = Anime4KManager.Mode.OFF,
-      quality = Anime4KManager.Quality.FAST,
+      quality = Anime4KManager.DEFAULT_QUALITY,
       reason = "Disabled Anime4K for 4K+ playback to prevent thermal throttling",
     )
   }
 
-  var selectedMode = mode
-  var selectedQuality = quality
-  val reasons = mutableListOf<String>()
-
-  val highLoadVideo = pixels >= 2560L * 1440L || fps >= 50.0
-  if (highLoadVideo) {
-    if (selectedMode in listOf(Anime4KManager.Mode.A_PLUS, Anime4KManager.Mode.B_PLUS, Anime4KManager.Mode.C_PLUS)) {
-      selectedMode = Anime4KManager.Mode.C
-      reasons += "Preset downgraded to C for high-load video"
-    }
-    if (selectedQuality != Anime4KManager.Quality.FAST) {
-      selectedQuality = Anime4KManager.Quality.FAST
-      reasons += "Quality forced to Fast for high-load video"
-    }
-  }
-
   return Anime4KSelection(
-    mode = selectedMode,
-    quality = selectedQuality,
-    reason = reasons.takeIf { it.isNotEmpty() }?.joinToString("; "),
+    mode = mode,
+    quality = quality,
   )
 }
 
@@ -111,11 +88,7 @@ internal fun selectRuntimeStableAnime4K(
 }
 
 internal fun clearAnime4KShaders() {
-  Anime4KManager.BUILT_IN_SHADER_FILES
-    .map { fileName -> "$MPV_SHADER_PREFIX$fileName" }
-    .forEach { shaderPath ->
-      runCatching { MPVLib.command("change-list", "glsl-shaders", "remove", shaderPath) }
-    }
+  setShaderList(currentShaderList().filterNot(::isBuiltInAnime4KShaderPath))
 }
 
 internal fun applyAnime4KShaderChain(
@@ -132,10 +105,8 @@ internal fun applyAnime4KShaderChain(
     return false
   }
 
-  clearAnime4KShaders()
-  shaderPaths.forEach { shaderPath ->
-    MPVLib.command("change-list", "glsl-shaders", "append", shaderPath)
-  }
+  val retainedShaders = currentShaderList().filterNot(::isBuiltInAnime4KShaderPath)
+  setShaderList(shaderPaths + retainedShaders)
   return true
 }
 
@@ -146,4 +117,21 @@ internal fun applyAnime4KStabilityOptions(useVulkan: Boolean) {
     MPVLib.setOptionString("opengl-early-flush", "no")
   }
   MPVLib.setOptionString("vd-lavc-dr", "yes")
+}
+
+private fun currentShaderList(): List<String> =
+  MPVLib.getPropertyString("glsl-shaders")
+    ?.split(":")
+    ?.map { it.trim() }
+    ?.filter { it.isNotEmpty() }
+    .orEmpty()
+
+private fun setShaderList(shaderPaths: List<String>) {
+  MPVLib.setPropertyString("glsl-shaders", shaderPaths.joinToString(":"))
+}
+
+private fun isBuiltInAnime4KShaderPath(path: String): Boolean {
+  val normalized = path.replace('\\', '/')
+  val fileName = normalized.substringAfterLast('/')
+  return fileName in Anime4KManager.BUILT_IN_SHADER_FILES
 }

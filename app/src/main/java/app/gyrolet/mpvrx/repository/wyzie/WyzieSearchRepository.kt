@@ -124,7 +124,6 @@ data class WyzieSeasonDetails(
 object WyzieSources {
     val ALL = mapOf(
         "all" to "All",
-        "subdl" to "SubDL",
         "subf2m" to "Subf2m",
         "opensubtitles" to "OpenSubtitles",
         "podnapisi" to "Podnapisi",
@@ -265,12 +264,12 @@ class WyzieSearchRepository(
                 }
             }
 
-            val selectedLangsRaw = preferences.subdlLanguages.get()
+            val selectedLangsRaw = preferences.subtitleSearchLanguages.get()
             val languages = if (selectedLangsRaw.isNotEmpty() && !selectedLangsRaw.contains("all")) {
                 selectedLangsRaw.joinToString(",").lowercase()
             } else null
 
-            val sources = preferences.wyzieSources.get()
+            val sources = preferences.wyzieSources.get().filterNot { it.equals("subdl", ignoreCase = true) }.toSet()
             val sourceParam = if (sources.isEmpty() || sources.contains("all")) "all" else sources.joinToString(",").lowercase()
             
             val formats = preferences.wyzieFormats.get()

@@ -2,9 +2,9 @@ package app.gyrolet.mpvrx.preferences
 
 import app.gyrolet.mpvrx.preferences.preference.PreferenceStore
 import app.gyrolet.mpvrx.preferences.preference.getEnum
+import app.gyrolet.mpvrx.domain.anime4k.Anime4KManager
 import app.gyrolet.mpvrx.ui.player.Debanding
 import app.gyrolet.mpvrx.ui.player.HdrScreenMode
-import app.gyrolet.mpvrx.ui.player.InterpolationMode
 
 class DecoderPreferences(
   preferenceStore: PreferenceStore,
@@ -32,13 +32,8 @@ class DecoderPreferences(
   val hueFilter = preferenceStore.getInt("filter_hue")
   val sharpnessFilter = preferenceStore.getInt("filter_sharpness")
 
-  // Frame Interpolation Preferences
-  val smoothMotion = preferenceStore.getBoolean("smooth_motion", false)
-  val interpolationMode = preferenceStore.getEnum("interpolation_mode", InterpolationMode.Oversample)
-  val interpolationFPSLimit = preferenceStore.getInt("interpolation_fps_limit", 0)
-
   // Anime4K Preferences
   val enableAnime4K = preferenceStore.getBoolean("enable_anime4k", false)
   val anime4kMode = preferenceStore.getString("anime4k_mode", "OFF")
-  val anime4kQuality = preferenceStore.getString("anime4k_quality", "FAST")
+  val anime4kQuality = preferenceStore.getEnum("anime4k_quality", Anime4KManager.DEFAULT_QUALITY)
 }

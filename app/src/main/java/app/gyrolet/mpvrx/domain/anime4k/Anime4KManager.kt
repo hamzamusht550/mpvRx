@@ -13,7 +13,6 @@ class Anime4KManager(private val context: Context) {
 
   companion object {
     private const val SHADER_DIR = "shaders"
-    private const val MPV_SHADER_PREFIX = "~~/shaders/"
     private val REQUIRED_SHADER_FILES = listOf(
       "Anime4K_Clamp_Highlights.glsl",
       "Anime4K_AutoDownscalePre_x2.glsl",
@@ -31,6 +30,7 @@ class Anime4KManager(private val context: Context) {
       "Anime4K_Upscale_Denoise_CNN_x2_L.glsl",
     )
     val BUILT_IN_SHADER_FILES: Set<String> = REQUIRED_SHADER_FILES.toSet()
+    val DEFAULT_QUALITY = Quality.BALANCED
   }
 
   // Shader quality levels
@@ -127,9 +127,11 @@ class Anime4KManager(private val context: Context) {
     return getShaderPaths(mode, quality).joinToString(":")
   }
 
+  fun getShaderPaths(mode: Mode): List<String> = getShaderPaths(mode, DEFAULT_QUALITY)
+
   fun getShaderPaths(mode: Mode, quality: Quality): List<String> {
     return getShaderFiles(mode, quality).map { file ->
-      "$MPV_SHADER_PREFIX${file.name}"
+      file.absolutePath
     }
   }
 

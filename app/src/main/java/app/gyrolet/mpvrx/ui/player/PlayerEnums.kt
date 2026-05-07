@@ -70,16 +70,6 @@ enum class Debanding(
   GPU(R.string.player_sheets_deband_gpu),
 }
 
-enum class InterpolationMode(val displayName: String, val mpvValue: String) {
-  Linear("Fast (Low Power)", "linear"),
-  Oversample("Balanced (Anime)", "oversample"),
-  Mitchell("Smooth (Cinematic)", "mitchell"),
-  CatmullRom("High Quality (Sharp)", "catmull_rom"),
-  ;
-
-  override fun toString(): String = displayName
-}
-
 enum class MPVProfile(
   val displayName: String,
   val value: String,

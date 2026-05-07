@@ -253,20 +253,20 @@ object SubtitlesPreferencesScreen : Screen {
               PreferenceDivider()
 
               // Languages
-              val subdlLanguages by preferences.subdlLanguages.collectAsState()
+              val subtitleSearchLanguages by preferences.subtitleSearchLanguages.collectAsState()
               MultiChoicePreference(
-                title = { Text(stringResource(R.string.pref_subtitles_subdl_languages)) },
+                title = { Text(stringResource(R.string.pref_subtitles_search_languages)) },
                 summary = {
-                  val summaryText = if (subdlLanguages.isEmpty() || subdlLanguages.contains("all")) {
+                  val summaryText = if (subtitleSearchLanguages.isEmpty() || subtitleSearchLanguages.contains("all")) {
                     stringResource(R.string.all_languages)
                   } else {
-                    subdlLanguages.mapNotNull { WyzieLanguages.ALL[it] }.joinToString(", ")
+                    subtitleSearchLanguages.mapNotNull { WyzieLanguages.ALL[it] }.joinToString(", ")
                   }
                   Text(summaryText, color = MaterialTheme.colorScheme.outline)
                 },
                 values = WyzieLanguages.SORTED,
-                selectedValues = subdlLanguages,
-                onValuesChange = { preferences.subdlLanguages.set(it) },
+                selectedValues = subtitleSearchLanguages,
+                onValuesChange = { preferences.subtitleSearchLanguages.set(it) },
                 hasAllOption = true
               )
 
