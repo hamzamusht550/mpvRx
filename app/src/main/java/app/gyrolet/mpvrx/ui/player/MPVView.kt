@@ -120,7 +120,6 @@ class MPVView(
     setVo(backend.vo)
     MPVLib.setOptionString("gpu-api", backend.gpuApi)
     MPVLib.setOptionString("gpu-context", backend.gpuContext)
-    Log.i(TAG, "Selected renderer: vo=${backend.vo}, gpu-api=${backend.gpuApi}, hwdec=$hwdecMode (${backend.reason})")
 
     val hdrScreenMode = decoderPreferences.hdrScreenMode.get().let { mode ->
       if (mode == HdrScreenMode.OFF && decoderPreferences.hdrScreenOutput.get()) HdrScreenMode.defaultEnabledMode else mode
@@ -170,15 +169,6 @@ class MPVView(
     // This reduces thermal load and helps prevent jitter/rebuffering on long sessions.
     MPVLib.setOptionString("hls-bitrate", "no")
     MPVLib.setOptionString("http-allow-redirect", "yes")
-    // Enable robust caching for long sessions to smooth bitrate/network variance.
-    MPVLib.setOptionString("cache", "yes")
-    MPVLib.setOptionString("cache-secs", "20")
-    MPVLib.setOptionString("demuxer-max-bytes", "64MiB")
-    MPVLib.setOptionString("demuxer-max-back-bytes", "32MiB")
-    // Allow seeking within already-buffered network content; larger stream buffer cuts stutter.
-    MPVLib.setOptionString("demuxer-seekable-cache", "yes")
-    MPVLib.setOptionString("stream-buffer-size", "16M")
-
     // Drop only video-output-bound late frames when rendering cannot keep up.
     // This prevents long-term jitter buildup without aggressively sacrificing smoothness.
     MPVLib.setOptionString("framedrop", "vo")
