@@ -2,6 +2,19 @@
 
 These notes are written in plain English and focus on what changed for real use.
 
+## 1.3.4
+
+- Capped generated thumbnails to safer preview sizes so large videos do not waste memory while browsing.
+- Improved MKV/WebM thumbnail handling, including embedded artwork and smarter fallback frames.
+- Cleaned old thumbnail cache paths when clearing thumbnail cache.
+- Fixed the About and crash info screen showing `UNKNOWN` in the bundled mpv version.
+- Updated Gradle, Kotlin, Compose, Koin, Navigation 3, AndroidX, and related dependency versions through the version catalog.
+- Added SUbHub MpvRx specific Subtitle Fetching nd Downloading featured developed by me
+- Added Video COmpresser Overlay in Tree Mode also
+- Cleaned up codebase and Improved Playback bottlenecks
+- Added Window Offset to prevent Camera notch overlap issues
+
+
 ## 1.3.3
 
 - Fixed Background Playback and Pip issues 
