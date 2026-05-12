@@ -11,7 +11,7 @@ plugins {
 
 android {
   namespace = "app.gyrolet.mpvrx"
-  compileSdk = 36
+  compileSdk = 37
 
   defaultConfig {
     applicationId = "app.gyrolet.mpvrx"
@@ -214,7 +214,7 @@ dependencies {
   implementation(libs.sora.language.textmate)
   // implementation(libs.sora.oniguruma.native)
 
-  coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+  coreLibraryDesugaring(libs.desugar.jdk.libs)
 
   implementation(libs.truetype.parser)
   implementation(libs.fsaf)

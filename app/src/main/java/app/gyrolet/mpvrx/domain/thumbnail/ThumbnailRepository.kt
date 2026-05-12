@@ -26,10 +26,9 @@ import kotlinx.coroutines.withContext
 import org.koin.java.KoinJavaComponent
 import java.io.File
 import java.security.MessageDigest
-import java.util.concurrent.ConcurrentHashMap
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
+import java.util.concurrent.ConcurrentHashMap
 
 class ThumbnailRepository(
   private val context: Context,
@@ -197,6 +196,8 @@ class ThumbnailRepository(
 
     imageLoader.memoryCache?.clear()
     imageLoader.diskCache?.clear()
+    runCatching { File(context.cacheDir, "thumbnails").deleteRecursively() }
+    runCatching { File(context.filesDir, "thumbnails").deleteRecursively() }
   }
 
   fun startFolderThumbnailGeneration(
@@ -412,7 +413,7 @@ class ThumbnailRepository(
             is ThumbnailStrategy.FrameAtPercentage -> getFrameAt(retriever, timeUs, targetWidth, targetHeight)
             is ThumbnailStrategy.Hybrid -> {
               val first = getFrameAt(retriever, 0L, targetWidth, targetHeight) ?: return@runCatching null
-              if (isMostlySolid(first)) {
+              if (isMostlySolidThumbnail(first)) {
                 first.recycle()
                 getFrameAt(retriever, frameTimeMicros(retriever, strategy.percentage), targetWidth, targetHeight)
               } else {
@@ -422,7 +423,7 @@ class ThumbnailRepository(
             is ThumbnailStrategy.EmbeddedOrHybrid ->
               embeddedPicture?.also { shouldRotate = false } ?: run {
                 val first = getFrameAt(retriever, 0L, targetWidth, targetHeight) ?: return@runCatching null
-                if (isMostlySolid(first)) {
+                if (isMostlySolidThumbnail(first)) {
                   first.recycle()
                   getFrameAt(retriever, frameTimeMicros(retriever, strategy.percentage), targetWidth, targetHeight)
                 } else {
@@ -490,63 +491,6 @@ class ThumbnailRepository(
       "User-Agent" to "Mozilla/5.0 (Android) MpvRx",
       "Accept" to "*/*",
     )
-
-  private fun isMostlySolid(
-    bitmap: Bitmap,
-    threshold: Float = 0.7f,
-  ): Boolean {
-    val width = bitmap.width
-    val height = bitmap.height
-    if (width <= 0 || height <= 0) {
-      return false
-    }
-
-    val marginX = width / 10
-    val marginY = height / 10
-    val sampleAreaRight = width - marginX
-    val sampleAreaBottom = height - marginY
-    val gridSize = 10
-    val stepX = (sampleAreaRight - marginX) / gridSize
-    val stepY = (sampleAreaBottom - marginY) / gridSize
-
-    if (stepX <= 0 || stepY <= 0) {
-      return false
-    }
-
-    val sampledColors = ArrayList<Int>(gridSize * gridSize)
-    for (x in 0 until gridSize) {
-      for (y in 0 until gridSize) {
-        val pixelX = marginX + x * stepX
-        val pixelY = marginY + y * stepY
-        if (pixelX in 0 until width && pixelY in 0 until height) {
-          sampledColors += bitmap.getPixel(pixelX, pixelY)
-        }
-      }
-    }
-
-    if (sampledColors.isEmpty()) {
-      return false
-    }
-
-    val referenceColor = sampledColors.first()
-    val referenceR = (referenceColor shr 16) and 0xFF
-    val referenceG = (referenceColor shr 8) and 0xFF
-    val referenceB = referenceColor and 0xFF
-    val tolerance = 30
-
-    val similarCount =
-      sampledColors.count { color ->
-        val r = (color shr 16) and 0xFF
-        val g = (color shr 8) and 0xFF
-        val b = color and 0xFF
-
-        abs(r - referenceR) <= tolerance &&
-          abs(g - referenceG) <= tolerance &&
-          abs(b - referenceB) <= tolerance
-      }
-
-    return similarCount.toFloat() / sampledColors.size >= threshold
-  }
 
   /**
    * Retrieve a thumbnail for a raw network file path (for use from [NetworkVideoCard]).

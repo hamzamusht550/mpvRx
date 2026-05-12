@@ -68,8 +68,8 @@ val domainModule = module {
             .diskCache(
                 DiskCache.Builder()
                     .fileSystem(FileSystem.SYSTEM)
-                    .directory(context.cacheDir.resolve("thumbnails"))
-                    .maxSizePercent(0.05)
+                    .directory(context.filesDir.resolve("thumbnails"))
+                    .maxSizePercent(1.0)
                     .build()
             )
             .crossfade(true)

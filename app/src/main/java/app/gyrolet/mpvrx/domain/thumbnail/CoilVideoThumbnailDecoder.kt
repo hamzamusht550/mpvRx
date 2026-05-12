@@ -1,10 +1,13 @@
 package app.gyrolet.mpvrx.domain.thumbnail
 
+import android.content.ContentUris
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.MediaMetadataRetriever
+import android.provider.MediaStore
 import android.os.Build
+import android.util.Size
 import androidx.core.graphics.drawable.toDrawable
 import app.gyrolet.mpvrx.utils.storage.FileTypeUtils
 import coil3.ImageLoader
@@ -19,7 +22,6 @@ import coil3.fetch.SourceFetchResult
 import coil3.request.Options
 import coil3.toAndroidUri
 import okio.FileSystem
-import kotlin.math.abs
 
 class CoilVideoThumbnailDecoder(
   private val source: ImageSource,
@@ -48,9 +50,20 @@ class CoilVideoThumbnailDecoder(
           .use(BitmapFactory::decodeStream)
 
       if (cachedBitmap != null) {
+        val sampledBitmap = cachedBitmap.scaleToThumbnailMax()
+        return DecodeResult(
+          image = sampledBitmap.toDrawable(options.context.resources).asImage(),
+          isSampled = sampledBitmap !== cachedBitmap,
+        )
+      }
+    }
+
+    if (strategy is ThumbnailStrategy.FirstFrame) {
+      tryLoadSystemThumbnail()?.let { systemBitmap ->
+        val cachedBitmap = writeToDiskCache(systemBitmap.scaleToThumbnailMax())
         return DecodeResult(
           image = cachedBitmap.toDrawable(options.context.resources).asImage(),
-          isSampled = false,
+          isSampled = true,
         )
       }
     }
@@ -69,16 +82,16 @@ class CoilVideoThumbnailDecoder(
       var shouldRotate = true
       val rawBitmap =
         when (strategy) {
-          ThumbnailStrategy.FirstFrame -> retriever.getFrameAtTime(0)
+          ThumbnailStrategy.FirstFrame -> retriever.getThumbnailFrameAt(0)
           is ThumbnailStrategy.FrameAtPercentage -> {
-            retriever.getFrameAtTime(frameTimeMicros(retriever, strategy.percentage))
+            retriever.getThumbnailFrameAt(frameTimeMicros(retriever, strategy.percentage))
           }
 
           is ThumbnailStrategy.Hybrid -> {
-            val firstFrame = retriever.getFrameAtTime(0)
-            if (firstFrame != null && isMostlySolid(firstFrame)) {
+            val firstFrame = retriever.getThumbnailFrameAt(0)
+            if (firstFrame != null && isMostlySolidThumbnail(firstFrame)) {
               firstFrame.recycle()
-              retriever.getFrameAtTime(frameTimeMicros(retriever, strategy.percentage))
+              retriever.getThumbnailFrameAt(frameTimeMicros(retriever, strategy.percentage))
             } else {
               firstFrame
             }
@@ -88,17 +101,58 @@ class CoilVideoThumbnailDecoder(
             embeddedPicture?.also { shouldRotate = false } ?: decodeHybridFrame(retriever, strategy.percentage)
 
           ThumbnailStrategy.EmbeddedOrFirstFrame ->
-            embeddedPicture?.also { shouldRotate = false } ?: retriever.getFrameAtTime(0)
+            embeddedPicture?.also { shouldRotate = false } ?: retriever.getThumbnailFrameAt(0)
         } ?: throw IllegalStateException("Failed to decode video thumbnail")
 
       val rotatedBitmap = if (shouldRotate) rotateBitmapIfNeeded(retriever, rawBitmap) else rawBitmap
-      val cachedBitmap = writeToDiskCache(rotatedBitmap)
+      val thumbnailBitmap = rotatedBitmap.scaleToThumbnailMax()
+      val cachedBitmap = writeToDiskCache(thumbnailBitmap)
 
       DecodeResult(
         image = cachedBitmap.toDrawable(options.context.resources).asImage(),
-        isSampled = false,
+        isSampled = true,
       )
     }
+  }
+
+  private fun tryLoadSystemThumbnail(): Bitmap? {
+    val uri =
+      when (val metadata = source.metadata) {
+        is ContentMetadata -> metadata.uri.toAndroidUri()
+        else -> {
+          if (source.fileSystem !== FileSystem.SYSTEM) return null
+          findContentUriForPath(source.file().toFile().path) ?: return null
+        }
+      }
+
+    return runCatching {
+      options.context.contentResolver.loadThumbnail(
+        uri,
+        Size(MAX_THUMBNAIL_SIZE, MAX_THUMBNAIL_SIZE),
+        null,
+      )
+    }.getOrNull()
+  }
+
+  private fun findContentUriForPath(path: String): android.net.Uri? {
+    val collection = MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+    val projection = arrayOf(MediaStore.Video.Media._ID)
+    return runCatching {
+      options.context.contentResolver.query(
+        collection,
+        projection,
+        "${MediaStore.Video.Media.DATA} = ?",
+        arrayOf(path),
+        null,
+      )?.use { cursor ->
+        if (cursor.moveToFirst()) {
+          val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID))
+          ContentUris.withAppendedId(collection, id)
+        } else {
+          null
+        }
+      }
+    }.getOrNull()
   }
 
   private fun sourcePath(): String? {
@@ -126,14 +180,28 @@ class CoilVideoThumbnailDecoder(
     retriever: MediaMetadataRetriever,
     percentage: Float,
   ): Bitmap? {
-    val firstFrame = retriever.getFrameAtTime(0)
-    return if (firstFrame != null && isMostlySolid(firstFrame)) {
+    val firstFrame = retriever.getThumbnailFrameAt(0)
+    return if (firstFrame != null && isMostlySolidThumbnail(firstFrame)) {
       firstFrame.recycle()
-      retriever.getFrameAtTime(frameTimeMicros(retriever, percentage))
+      retriever.getThumbnailFrameAt(frameTimeMicros(retriever, percentage))
     } else {
       firstFrame
     }
   }
+
+  private fun MediaMetadataRetriever.getThumbnailFrameAt(timeUs: Long): Bitmap? =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+      runCatching {
+        getScaledFrameAtTime(
+          timeUs,
+          MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+          MAX_THUMBNAIL_SIZE,
+          MAX_THUMBNAIL_SIZE,
+        )
+      }.getOrNull() ?: getFrameAtTime(timeUs)
+    } else {
+      getFrameAtTime(timeUs)
+    }
 
   private fun MediaMetadataRetriever.setDataSource(source: ImageSource) {
     val metadata = source.metadata
@@ -181,7 +249,7 @@ class CoilVideoThumbnailDecoder(
     val editor = diskCache.value?.openEditor(diskCacheKey) ?: return inBitmap
     try {
       editor.data.toFile().outputStream().use { output ->
-        inBitmap.compress(Bitmap.CompressFormat.JPEG, 80, output)
+        inBitmap.compress(Bitmap.CompressFormat.JPEG, 90, output)
       }
       editor.commitAndOpenSnapshot()?.use { snapshot ->
         val outBitmap =
@@ -271,63 +339,6 @@ sealed class ThumbnailStrategy {
   data object EmbeddedOrFirstFrame : ThumbnailStrategy() {
     override val cacheKey: String = "embedded_or_first_frame"
   }
-}
-
-private fun isMostlySolid(
-  bitmap: Bitmap,
-  threshold: Float = 0.7f,
-): Boolean {
-  val width = bitmap.width
-  val height = bitmap.height
-  if (width <= 0 || height <= 0) {
-    return false
-  }
-
-  val marginX = width / 10
-  val marginY = height / 10
-  val sampleAreaRight = width - marginX
-  val sampleAreaBottom = height - marginY
-  val gridSize = 10
-  val stepX = (sampleAreaRight - marginX) / gridSize
-  val stepY = (sampleAreaBottom - marginY) / gridSize
-
-  if (stepX <= 0 || stepY <= 0) {
-    return false
-  }
-
-  val sampledColors = mutableListOf<Int>()
-  for (x in 0 until gridSize) {
-    for (y in 0 until gridSize) {
-      val pixelX = marginX + x * stepX
-      val pixelY = marginY + y * stepY
-      if (pixelX in 0 until width && pixelY in 0 until height) {
-        sampledColors += bitmap.getPixel(pixelX, pixelY)
-      }
-    }
-  }
-
-  if (sampledColors.isEmpty()) {
-    return false
-  }
-
-  val referenceColor = sampledColors.first()
-  val referenceR = (referenceColor shr 16) and 0xFF
-  val referenceG = (referenceColor shr 8) and 0xFF
-  val referenceB = referenceColor and 0xFF
-  val tolerance = 30
-
-  val similarCount =
-    sampledColors.count { color ->
-      val r = (color shr 16) and 0xFF
-      val g = (color shr 8) and 0xFF
-      val b = color and 0xFF
-
-      abs(r - referenceR) <= tolerance &&
-        abs(g - referenceG) <= tolerance &&
-        abs(b - referenceB) <= tolerance
-    }
-
-  return similarCount.toFloat() / sampledColors.size >= threshold
 }
 
 private inline fun <T> MediaMetadataRetriever.use(block: (MediaMetadataRetriever) -> T): T =
