@@ -87,7 +87,7 @@ fun NetworkVideoCard(
       .collect { key ->
         if (key == thumbnailKey) {
           thumbnail = withContext(Dispatchers.IO) {
-            thumbnailRepository.getThumbnailForNetworkPath(file.path, thumbSizePx, thumbSizePx)
+            thumbnailRepository.getThumbnailForNetworkPath(file.path, thumbSizePx, thumbSizePx, connection)
           }
         }
       }
@@ -98,7 +98,7 @@ fun NetworkVideoCard(
     if (thumbnailKey == null || !showNetworkThumbs) return@LaunchedEffect
     if (thumbnail != null) return@LaunchedEffect
     thumbnail = withContext(Dispatchers.IO) {
-      thumbnailRepository.getThumbnailForNetworkPath(file.path, thumbSizePx, thumbSizePx)
+      thumbnailRepository.getThumbnailForNetworkPath(file.path, thumbSizePx, thumbSizePx, connection)
     }
   }
 
