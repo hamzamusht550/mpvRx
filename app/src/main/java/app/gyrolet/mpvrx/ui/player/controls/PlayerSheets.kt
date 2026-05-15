@@ -124,6 +124,9 @@ fun PlayerSheets(
           )
       }
 
+      val isTranslating by viewModel.isTranslatingSub.composeCollectAsState()
+      val translationProgress by viewModel.translationProgress.composeCollectAsState()
+
       SubtitlesSheet(
         tracks = subtitles.toImmutableList(),
         onToggleSubtitle = onToggleSubtitle,
@@ -133,7 +136,10 @@ fun PlayerSheets(
         onOpenSubtitleSettings = { onOpenPanel(Panels.SubtitleSettings) },
         onOpenSubtitleDelay = { onOpenPanel(Panels.SubtitleDelay) },
         onOpenOnlineSearch = { onShowSheet(Sheets.OnlineSubtitleSearch) },
-        onDismissRequest = onDismissRequest
+        onDismissRequest = onDismissRequest,
+        onTranslateSubtitle = { track, lang -> viewModel.translateSubtitle(track, lang) },
+        isTranslating = isTranslating,
+        translationProgress = translationProgress
       )
     }
 

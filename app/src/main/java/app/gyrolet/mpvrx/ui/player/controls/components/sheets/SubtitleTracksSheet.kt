@@ -21,6 +21,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -49,6 +52,9 @@ fun SubtitlesSheet(
   onRemoveSubtitle: (Int) -> Unit,
   onOpenOnlineSearch: () -> Unit,
   onDismissRequest: () -> Unit,
+  onTranslateSubtitle: (TrackNode, String) -> Unit,
+  isTranslating: Boolean,
+  translationProgress: Float,
   modifier: Modifier = Modifier,
 ) {
   val items = remember(tracks) {
@@ -66,6 +72,42 @@ fun SubtitlesSheet(
     }
 
     list.toImmutableList()
+  }
+
+  val languages = remember {
+    listOf(
+      "English", "Spanish", "French", "German", "Japanese", 
+      "Korean", "Chinese", "Arabic", "Hindi", "Portuguese"
+    )
+  }
+  var showLanguagePicker by remember { androidx.compose.runtime.mutableStateOf<TrackNode?>(null) }
+
+  if (showLanguagePicker != null) {
+    androidx.compose.material3.AlertDialog(
+      onDismissRequest = { showLanguagePicker = null },
+      title = { Text("Translate to...") },
+      text = {
+        LazyColumn {
+          items(languages) { lang ->
+            Text(
+              text = lang,
+              modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                  onTranslateSubtitle(showLanguagePicker!!, lang)
+                  showLanguagePicker = null
+                }
+                .padding(MaterialTheme.spacing.medium)
+            )
+          }
+        }
+      },
+      confirmButton = {
+        androidx.compose.material3.TextButton(onClick = { showLanguagePicker = null }) {
+          Text("Cancel")
+        }
+      }
+    )
   }
 
   PlayerSheet(onDismissRequest) {
@@ -86,6 +128,23 @@ fun SubtitlesSheet(
         },
       )
 
+      if (isTranslating) {
+        androidx.compose.foundation.layout.Column(
+          modifier = Modifier.padding(MaterialTheme.spacing.medium),
+          verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall)
+        ) {
+          Text(
+            "Translating... ${(translationProgress * 100).toInt()}%",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary
+          )
+          androidx.compose.material3.LinearProgressIndicator(
+            progress = { translationProgress },
+            modifier = Modifier.fillMaxWidth(),
+          )
+        }
+      }
+
       LazyColumn {
         items(items) { item ->
           when (item) {
@@ -97,6 +156,7 @@ fun SubtitlesSheet(
                 isExternal = track.external == true,
                 onToggle = { onToggleSubtitle(track.id) },
                 onRemove = { onRemoveSubtitle(track.id) },
+                onTranslate = { showLanguagePicker = track }
               )
             }
             is SubtitleItem.Header -> {
@@ -138,6 +198,7 @@ fun SubtitleTrackRow(
   isExternal: Boolean,
   onToggle: () -> Unit,
   onRemove: () -> Unit,
+  onTranslate: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
   Row(
@@ -150,7 +211,9 @@ fun SubtitleTrackRow(
   ) {
     Checkbox(checked = isSelected, onCheckedChange = { onToggle() })
     Text(title, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f))
+    
     if (isExternal) {
+      IconButton(onClick = onTranslate) { Icon(Icons.Default.Language, contentDescription = "Translate") }
       IconButton(onClick = onRemove) { Icon(Icons.Default.Delete, contentDescription = null) }
     }
   }

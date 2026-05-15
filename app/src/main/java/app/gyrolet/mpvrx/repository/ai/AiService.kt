@@ -48,6 +48,7 @@ class AiService(
   suspend fun generateWithAi(
     userInput: String,
     task: AiTask,
+    extraInstruction: String? = null,
   ): Result<String> = withContext(Dispatchers.IO) {
     val provider = preferences.provider.get()
     val apiKey = getApiKey(provider)
@@ -66,7 +67,10 @@ class AiService(
       return@withContext Result.failure(Exception("No AI model selected"))
     }
 
-    val instruction = AiPrompts.resolveInstruction(task, customPromptEnabled, customPrompt)
+    var instruction = AiPrompts.resolveInstruction(task, customPromptEnabled, customPrompt)
+    if (extraInstruction != null) {
+      instruction = "$instruction\n\n$extraInstruction"
+    }
 
     when (provider) {
       AiProvider.GEMINI -> geminiClient.generateContent(apiKey, model, instruction, userInput)
@@ -103,5 +107,47 @@ class AiService(
   private fun getApiKey(provider: AiProvider): String = when (provider) {
     AiProvider.GEMINI -> preferences.geminiApiKey.get()
     AiProvider.GROQ -> preferences.groqApiKey.get()
+  }
+
+  /**
+   * Translates a subtitle string (SRT format) in chunks to avoid context limits.
+   */
+  suspend fun translateSubtitle(
+    content: String,
+    targetLanguage: String,
+    onProgress: (Float) -> Unit = {}
+  ): Result<String> = withContext(Dispatchers.IO) {
+    try {
+      // Split by empty lines to get subtitle blocks
+      // Handle both CRLF and LF
+      val blocks = content.split(Regex("(\\r?\\n){2,}")).filter { it.isNotBlank() }
+      if (blocks.isEmpty()) return@withContext Result.success(content)
+
+      val chunkSize = 30 // Translate 30 blocks at a time
+      val totalChunks = (blocks.size + chunkSize - 1) / chunkSize
+      val translatedBlocks = mutableListOf<String>()
+
+      for (i in 0 until totalChunks) {
+        val start = i * chunkSize
+        val end = minOf(start + chunkSize, blocks.size)
+        val chunk = blocks.subList(start, end).joinToString("\n\n")
+
+        val extra = "TARGET LANGUAGE: $targetLanguage"
+        val result = generateWithAi(chunk, AiTask.TRANSLATE, extra)
+        
+        result.onSuccess { translatedChunk ->
+          translatedBlocks.add(translatedChunk.trim())
+        }.onFailure { error ->
+          return@withContext Result.failure(error)
+        }
+
+        onProgress((i + 1).toFloat() / totalChunks)
+      }
+
+      Result.success(translatedBlocks.joinToString("\n\n"))
+    } catch (e: Exception) {
+      Log.e(TAG, "Subtitle translation failed", e)
+      Result.failure(e)
+    }
   }
 }

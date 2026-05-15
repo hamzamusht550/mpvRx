@@ -138,6 +138,7 @@ class PlayerViewModel(
   private val hdrToysManager: HdrToysManager by inject()
   private val json: Json by inject()
   private val playbackStateDao: app.gyrolet.mpvrx.database.dao.PlaybackStateDao by inject()
+  private val aiService: app.gyrolet.mpvrx.repository.ai.AiService by inject()
   private val wyzieRepository: WyzieSearchRepository by inject()
   private val onlineSubtitleOrchestrator: OnlineSubtitleOrchestrator by inject()
   private val introDbRepository: IntroDbRepository by inject()
@@ -160,6 +161,12 @@ class PlayerViewModel(
 
   private val _isOnlineSectionExpanded = MutableStateFlow(true)
   val isOnlineSectionExpanded: StateFlow<Boolean> = _isOnlineSectionExpanded.asStateFlow()
+
+  private val _isTranslatingSub = MutableStateFlow(false)
+  val isTranslatingSub: StateFlow<Boolean> = _isTranslatingSub.asStateFlow()
+
+  private val _translationProgress = MutableStateFlow(0f)
+  val translationProgress: StateFlow<Float> = _translationProgress.asStateFlow()
 
   private var playlistMetadataJob: Job? = null
   private var controlsVisibleForPolling = false
@@ -1247,6 +1254,69 @@ class PlayerViewModel(
             }
           }
         }
+      }
+    }
+  }
+
+  fun translateSubtitle(track: TrackNode, targetLanguage: String) {
+    val externalPath = track.externalFilename ?: return
+    val uriString = mpvPathToUriMap[externalPath] ?: externalPath
+    val uri = Uri.parse(uriString)
+
+    viewModelScope.launch(Dispatchers.IO) {
+      _isTranslatingSub.value = true
+      _translationProgress.value = 0f
+
+      try {
+        val content = host.context.contentResolver.openInputStream(uri)?.use {
+          it.readBytes().decodeToString()
+        } ?: throw Exception("Could not read subtitle file")
+
+        val result = aiService.translateSubtitle(content, targetLanguage) { progress ->
+          _translationProgress.value = progress
+        }
+
+        result.onSuccess { translatedContent ->
+          val originalFileName = getFileNameFromUri(uri) ?: "subtitle.srt"
+          val baseName = originalFileName.substringBeforeLast(".")
+          val extension = originalFileName.substringAfterLast(".", "srt")
+          val newFileName = "${baseName}.${targetLanguage}.AI.${extension}"
+
+          // Attempt to resolve real path to save in the same directory
+          val mpvPath = uri.resolveUri(host.context)
+          val targetFile = if (mpvPath != null && !mpvPath.startsWith("fd://")) {
+            val originalFile = File(mpvPath)
+            val parent = originalFile.parentFile
+            // Check if we can write to the original parent directory
+            if (parent?.exists() == true && (parent.canWrite() || uri.scheme == "file")) {
+              File(parent, newFileName)
+            } else null
+          } else null
+
+          // Fallback to app's external subtitles directory if original is inaccessible
+          val finalTargetFile = targetFile ?: File(
+            File(host.context.getExternalFilesDir(null), "Subtitles"),
+            newFileName
+          ).apply { parentFile?.mkdirs() }
+
+          finalTargetFile.writeText(translatedContent)
+
+          withContext(Dispatchers.Main) {
+            addSubtitle(Uri.fromFile(finalTargetFile), select = true)
+            showToast("Translation complete: $newFileName")
+          }
+        }.onFailure { error ->
+          withContext(Dispatchers.Main) {
+            showToast("Translation failed: ${error.message}")
+          }
+        }
+      } catch (e: Exception) {
+        withContext(Dispatchers.Main) {
+          showToast("Error: ${e.message}")
+        }
+      } finally {
+        _isTranslatingSub.value = false
+        _translationProgress.value = 0f
       }
     }
   }

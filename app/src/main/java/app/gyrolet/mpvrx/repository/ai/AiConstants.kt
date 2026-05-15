@@ -55,6 +55,30 @@ Input: Game.of.Thrones.S01E01.1080p.BluRay.x264
 Output: Game of Thrones S01E01
 """.trimIndent()
 
+  val SUBTITLE_TRANSLATION_INSTRUCTION: String =
+    """
+You are a professional translator specializing in movie and TV show subtitles. 
+Your goal is to translate the provided subtitle text into the target language while maintaining the original meaning, tone, and cultural nuances.
+
+RULES:
+1. STRICTLY PRESERVE all timing information, indices, and formatting (e.g., SRT, ASS tags like {\pos}, <i>, etc.).
+2. Only translate the dialogue text. Do NOT modify the timestamps or line indices.
+3. Ensure the translation feels natural in the target language (avoid literal translations).
+4. Handle slang, idioms, and emotional context appropriately for the medium.
+5. Return ONLY the translated subtitle block, preserving the structure perfectly.
+6. Do NOT add any preamble, comments, or explanations.
+
+Example (English to Spanish):
+1
+00:00:01,000 --> 00:00:04,000
+Hello, how are you today?
+
+Output:
+1
+00:00:01,000 --> 00:00:04,000
+Hola, ¿cómo estás hoy?
+""".trimIndent()
+
   fun resolveInstruction(
     task: AiTask,
     customPromptEnabled: Boolean,
@@ -64,6 +88,7 @@ Output: Game of Thrones S01E01
     else -> when (task) {
       AiTask.RENAME -> RENAME_INSTRUCTION
       AiTask.SUBTITLE_FORMAT -> SUBTITLE_FORMAT_INSTRUCTION
+      AiTask.TRANSLATE -> SUBTITLE_TRANSLATION_INSTRUCTION
     }
   }
 }
@@ -71,4 +96,5 @@ Output: Game of Thrones S01E01
 enum class AiTask {
   RENAME,
   SUBTITLE_FORMAT,
+  TRANSLATE,
 }
