@@ -2,6 +2,15 @@
 
 These notes are written in plain English and focus on what changed for real use.
 
+## 1.3.5
+
+- **Removed Play Store and F-Droid build variants** — streamlined to a single `standard` flavor with full update support and all features enabled.
+- **Revamped README** — comprehensive feature documentation organized by category, UPI QR code and Buy Me a Coffee links in the Support section.
+- **SMB Network Thumbnail Generation** — fixed thumbnail generation for SMB shares through Codex AI (Beta).
+- **Bulk AI Rename** — rename multiple files at once using Gemini or Groq with concurrency limiting and edge case handling.
+- **AI Subtitle Translation** — translate subtitles using AI providers with custom prompts, progress indication, and user preference management.
+- **AI Subtitle Translation Enhancements** — in-house developed translation pipeline with fully customizable prompts and per-user preference overrides.
+
 ## 1.3.4
 
 - Capped generated thumbnails to safer preview sizes so large videos do not waste memory while browsing.

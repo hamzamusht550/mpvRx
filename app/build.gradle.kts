@@ -17,8 +17,8 @@ android {
     applicationId = "app.gyrolet.mpvrx"
     minSdk = 26
     targetSdk = 36
-    versionCode = 134
-    versionName = "1.3.4"
+    versionCode = 135
+    versionName = "1.3.5"
 
     vectorDrawables {
       useSupportLibrary = true
@@ -34,20 +34,6 @@ android {
     create("standard") {
       dimension = "distribution"
       buildConfigField("boolean", "ENABLE_UPDATE_FEATURE", "true")
-      buildConfigField("boolean", "SCOPED_STORAGE_ONLY", "false")
-    }
-
-    create("playstore") {
-      dimension = "distribution"
-      versionNameSuffix = "-playstore"
-      buildConfigField("boolean", "ENABLE_UPDATE_FEATURE", "false")
-      buildConfigField("boolean", "SCOPED_STORAGE_ONLY", "true")
-    }
-
-    create("fdroid") {
-      dimension = "distribution"
-      versionNameSuffix = "-fdroid"
-      buildConfigField("boolean", "ENABLE_UPDATE_FEATURE", "false")
       buildConfigField("boolean", "SCOPED_STORAGE_ONLY", "false")
     }
   }

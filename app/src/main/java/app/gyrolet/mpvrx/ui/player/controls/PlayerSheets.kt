@@ -126,6 +126,10 @@ fun PlayerSheets(
 
       val isTranslating by viewModel.isTranslatingSub.composeCollectAsState()
       val translationProgress by viewModel.translationProgress.composeCollectAsState()
+      val translatingTrackId by viewModel.translatingTrackId.composeCollectAsState()
+      val translatingTrackName by viewModel.translatingTrackName.composeCollectAsState()
+      val aiPreferences = koinInject<app.gyrolet.mpvrx.preferences.AiPreferences>()
+      val translationEnabled by aiPreferences.subtitleTranslationEnabled.collectAsState()
 
       SubtitlesSheet(
         tracks = subtitles.toImmutableList(),
@@ -139,7 +143,10 @@ fun PlayerSheets(
         onDismissRequest = onDismissRequest,
         onTranslateSubtitle = { track, lang -> viewModel.translateSubtitle(track, lang) },
         isTranslating = isTranslating,
-        translationProgress = translationProgress
+        translationProgress = translationProgress,
+        translationEnabled = translationEnabled,
+        translatingTrackId = translatingTrackId,
+        translatingTrackName = translatingTrackName,
       )
     }
 

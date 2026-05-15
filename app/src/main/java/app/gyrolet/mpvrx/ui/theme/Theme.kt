@@ -277,6 +277,7 @@ private const val RIPPLE_HOVERED_ALPHA = .4f
 private const val RIPPLE_PRESSED_ALPHA = .6f
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("DEPRECATION")
 val playerRippleConfiguration
     @Composable get() =
         RippleConfiguration(

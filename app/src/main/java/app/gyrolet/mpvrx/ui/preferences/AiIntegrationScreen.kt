@@ -77,8 +77,13 @@ object AiIntegrationScreen : Screen {
     val selectedModel by preferences.selectedModel.collectAsState()
     val customPromptEnabled by preferences.customPromptEnabled.collectAsState()
     val customPrompt by preferences.customPrompt.collectAsState()
+    val customRenamePrompt by preferences.customRenamePrompt.collectAsState()
+    val customSubtitleTranslationPrompt by preferences.customSubtitleTranslationPrompt.collectAsState()
+    val customSubtitleFormatPrompt by preferences.customSubtitleFormatPrompt.collectAsState()
     val renameWithAi by preferences.renameWithAi.collectAsState()
     val subtitleFormatWithAi by preferences.subtitleFormatWithAi.collectAsState()
+    val subtitleTranslationEnabled by preferences.subtitleTranslationEnabled.collectAsState()
+    val subtitleTranslationFirstTime by preferences.subtitleTranslationFirstTime.collectAsState()
 
     var models by remember { mutableStateOf<List<AiModelInfo>>(emptyList()) }
     var isLoadingModels by remember { mutableStateOf(false) }
@@ -86,6 +91,7 @@ object AiIntegrationScreen : Screen {
     var verifyResult by remember { mutableStateOf<String?>(null) }
     var showApiKey by remember { mutableStateOf(false) }
     var modelLoadError by remember { mutableStateOf<String?>(null) }
+    var showSubtitleTranslationWarning by remember { mutableStateOf(false) }
 
     val json = koinInject<Json>()
 
@@ -446,6 +452,25 @@ object AiIntegrationScreen : Screen {
                     )
                   },
                 )
+
+                PreferenceDivider()
+
+                SwitchPreference(
+                  value = subtitleTranslationEnabled,
+                  onValueChange = { enabled ->
+                    preferences.subtitleTranslationEnabled.set(enabled)
+                    if (enabled && subtitleTranslationFirstTime) {
+                      showSubtitleTranslationWarning = true
+                    }
+                  },
+                  title = { Text("Subtitle Translation") },
+                  summary = {
+                    Text(
+                      "Translate external subtitles using AI",
+                      color = MaterialTheme.colorScheme.outline,
+                    )
+                  },
+                )
               }
             }
 
@@ -469,39 +494,94 @@ object AiIntegrationScreen : Screen {
                 if (customPromptEnabled) {
                   PreferenceDivider()
 
-                  val scrollState = rememberScrollState()
                   Column(
                     modifier = Modifier
                       .fillMaxWidth()
                       .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                   ) {
                     Text(
-                      text = "Custom System Prompt",
+                      text = "Custom Prompts",
                       style = MaterialTheme.typography.labelLarge,
                       fontWeight = FontWeight.Bold,
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    TextField(
-                      value = customPrompt,
-                      onValueChange = { preferences.customPrompt.set(it) },
-                      modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                      placeholder = { Text("Enter your custom instructions for the AI model...") },
-                      maxLines = Int.MAX_VALUE,
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
+
                     Text(
-                      text = "When enabled, this prompt overrides all built-in AI instructions for both rename and subtitle formatting.",
+                      text = "Leave a field blank to use the built-in instruction for that task. If you have an older global prompt saved, it will be used as a fallback.",
                       style = MaterialTheme.typography.bodySmall,
                       color = MaterialTheme.colorScheme.outline,
                     )
+
+                    TextField(
+                      value = customRenamePrompt,
+                      onValueChange = { preferences.customRenamePrompt.set(it) },
+                      modifier = Modifier
+                        .fillMaxWidth()
+                        .height(140.dp),
+                      label = { Text("Custom rename prompt") },
+                      placeholder = { Text("Instructions for AI file renaming...") },
+                      maxLines = 6,
+                    )
+
+                    TextField(
+                      value = customSubtitleTranslationPrompt,
+                      onValueChange = { preferences.customSubtitleTranslationPrompt.set(it) },
+                      modifier = Modifier
+                        .fillMaxWidth()
+                        .height(140.dp),
+                      label = { Text("Custom subtitle translation prompt") },
+                      placeholder = { Text("Instructions for AI subtitle translation...") },
+                      maxLines = 6,
+                    )
+
+                    TextField(
+                      value = customSubtitleFormatPrompt,
+                      onValueChange = { preferences.customSubtitleFormatPrompt.set(it) },
+                      modifier = Modifier
+                        .fillMaxWidth()
+                        .height(140.dp),
+                      label = { Text("Custom subtitle formatting prompt") },
+                      placeholder = { Text("Instructions for formatting subtitle search queries...") },
+                      maxLines = 6,
+                    )
+
+                    if (customPrompt.isNotBlank()) {
+                      Text(
+                        text = "Legacy global prompt saved. It will be used whenever a task-specific prompt is empty.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                      )
+                    }
                   }
                 }
               }
-            }
+        }
+      }
+    }
+
+    if (showSubtitleTranslationWarning) {
+      AlertDialog(
+        onDismissRequest = {
+          showSubtitleTranslationWarning = false
+          preferences.subtitleTranslationFirstTime.set(false)
+        },
+        title = { Text("Subtitle Translation") },
+        text = {
+          Text(
+            "Subtitle translation can be a bit messy. " +
+            "For best results, use better models and don't rant that subs aren't working properly."
+          )
+        },
+        confirmButton = {
+          TextButton(onClick = {
+            showSubtitleTranslationWarning = false
+            preferences.subtitleTranslationFirstTime.set(false)
+          }) {
+            Text("Got it")
           }
         }
+      )
+    }
       }
     }
   }

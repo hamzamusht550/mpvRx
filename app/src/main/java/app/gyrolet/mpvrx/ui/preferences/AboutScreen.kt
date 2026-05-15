@@ -318,6 +318,100 @@ object AboutScreen : Screen {
 
         Spacer(Modifier.height(8.dp))
 
+        // Support / Donation Section
+        PreferenceSectionHeader(title = "Support")
+        PreferenceCard {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.MonetizationOn,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = cs.error,
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "Buy Me a Coffee",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = cs.onSurface,
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = "If you enjoy MpvRx, consider supporting its development. Every bit helps!",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = cs.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(14.dp))
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = cs.primaryContainer.copy(alpha = 0.4f),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                clipboardManager.setText(AnnotatedString("panditritesh2001@okhdfcbank"))
+                                Toast.makeText(context, "UPI ID copied!", Toast.LENGTH_SHORT).show()
+                            }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "UPI ID",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = cs.outline,
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = "panditritesh2001@okhdfcbank",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Medium,
+                                color = cs.onSurface,
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copy UPI ID",
+                            modifier = Modifier.size(20.dp),
+                            tint = cs.primary,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = {
+                        try {
+                            val upiIntent = Intent(
+                                Intent.ACTION_VIEW,
+                                "upi://pay?pa=panditritesh2001@okhdfcbank&pn=Ritesh%20Pandit&cu=INR".toUri(),
+                            )
+                            context.startActivity(upiIntent)
+                        } catch (_: Exception) {
+                            Toast.makeText(context, "No UPI app found", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = cs.error,
+                        contentColor = cs.onError,
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
+                ) {
+                    Icon(Icons.Filled.MonetizationOn, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Send Love", fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
         // Updates Section (only show if update feature is enabled)
         if (BuildConfig.ENABLE_UPDATE_FEATURE && updateViewModel != null) {
           PreferenceSectionHeader(title = "Updates")

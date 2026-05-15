@@ -70,11 +70,11 @@ class GeminiClient(
         .build()
 
       val response = apiClient.newCall(request).execute()
-      val body = response.body?.string() ?: throw Exception("Empty response body")
+      val body = response.body.string()
 
       if (!response.isSuccessful) {
         val errorMsg = parseError(body)
-        throw Exception("Gemini API error ${response.code}: $errorMsg")
+        throw Exception("Gemini model fetch error ${response.code}: $errorMsg")
       }
 
       val parsed = json.decodeFromString<GeminiModelListResponse>(body)
@@ -99,7 +99,7 @@ class GeminiClient(
 
       val response = apiClient.newCall(request).execute()
       if (!response.isSuccessful) {
-        val body = response.body?.string() ?: ""
+        val body = response.body.string()
         throw Exception("Invalid API key: ${response.code} $body")
       }
       "API key verified successfully"
@@ -137,7 +137,7 @@ class GeminiClient(
         .build()
 
       val response = apiClient.newCall(request).execute()
-      val body = response.body?.string() ?: throw Exception("Empty response body")
+      val body = response.body.string()
 
       if (!response.isSuccessful) {
         val errorMsg = parseError(body)

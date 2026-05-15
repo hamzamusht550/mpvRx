@@ -61,12 +61,13 @@ You are a professional translator specializing in movie and TV show subtitles.
 Your goal is to translate the provided subtitle text into the target language while maintaining the original meaning, tone, and cultural nuances.
 
 RULES:
-1. STRICTLY PRESERVE all timing information, indices, and formatting (e.g., SRT, ASS tags like {\pos}, <i>, etc.).
-2. Only translate the dialogue text. Do NOT modify the timestamps or line indices.
+1. STRICTLY PRESERVE all timing information, indices, and formatting (e.g., SRT, VTT, ASS tags like {\pos}, <i>, etc.).
+2. Only translate the dialogue text. Do NOT modify the timestamps, line indices, formatting, or subtitle metadata.
 3. Ensure the translation feels natural in the target language (avoid literal translations).
 4. Handle slang, idioms, and emotional context appropriately for the medium.
-5. Return ONLY the translated subtitle block, preserving the structure perfectly.
-6. Do NOT add any preamble, comments, or explanations.
+5. Keep the output in the same subtitle format as the input file.
+6. Return ONLY the translated subtitle block, preserving the structure perfectly.
+7. Do NOT add any preamble, comments, or explanations.
 
 Example (English to Spanish):
 1
@@ -83,12 +84,32 @@ Hola, ¿cómo estás hoy?
     task: AiTask,
     customPromptEnabled: Boolean,
     customPrompt: String,
-  ): String = when {
-    customPromptEnabled && customPrompt.isNotBlank() -> customPrompt
-    else -> when (task) {
-      AiTask.RENAME -> RENAME_INSTRUCTION
-      AiTask.SUBTITLE_FORMAT -> SUBTITLE_FORMAT_INSTRUCTION
-      AiTask.TRANSLATE -> SUBTITLE_TRANSLATION_INSTRUCTION
+    customRenamePrompt: String,
+    customSubtitleTranslationPrompt: String,
+    customSubtitleFormatPrompt: String,
+  ): String {
+    if (!customPromptEnabled) {
+      return when (task) {
+        AiTask.RENAME -> RENAME_INSTRUCTION
+        AiTask.SUBTITLE_FORMAT -> SUBTITLE_FORMAT_INSTRUCTION
+        AiTask.TRANSLATE -> SUBTITLE_TRANSLATION_INSTRUCTION
+      }
+    }
+
+    val taskPrompt = when (task) {
+      AiTask.RENAME -> customRenamePrompt
+      AiTask.SUBTITLE_FORMAT -> customSubtitleFormatPrompt
+      AiTask.TRANSLATE -> customSubtitleTranslationPrompt
+    }
+
+    return when {
+      taskPrompt.isNotBlank() -> taskPrompt.trim()
+      customPrompt.isNotBlank() -> customPrompt.trim()
+      else -> when (task) {
+        AiTask.RENAME -> RENAME_INSTRUCTION
+        AiTask.SUBTITLE_FORMAT -> SUBTITLE_FORMAT_INSTRUCTION
+        AiTask.TRANSLATE -> SUBTITLE_TRANSLATION_INSTRUCTION
+      }
     }
   }
 }

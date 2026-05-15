@@ -6,6 +6,7 @@ import app.gyrolet.mpvrx.preferences.AiProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import java.util.Locale
 
 class AiService(
   private val preferences: AiPreferences,
@@ -59,6 +60,9 @@ class AiService(
     }
     val customPromptEnabled = preferences.customPromptEnabled.get()
     val customPrompt = preferences.customPrompt.get()
+    val customRenamePrompt = preferences.customRenamePrompt.get()
+    val customSubtitleTranslationPrompt = preferences.customSubtitleTranslationPrompt.get()
+    val customSubtitleFormatPrompt = preferences.customSubtitleFormatPrompt.get()
 
     if (apiKey.isBlank()) {
       return@withContext Result.failure(Exception("API key not configured for $provider"))
@@ -67,7 +71,14 @@ class AiService(
       return@withContext Result.failure(Exception("No AI model selected"))
     }
 
-    var instruction = AiPrompts.resolveInstruction(task, customPromptEnabled, customPrompt)
+    var instruction = AiPrompts.resolveInstruction(
+      task,
+      customPromptEnabled,
+      customPrompt,
+      customRenamePrompt,
+      customSubtitleTranslationPrompt,
+      customSubtitleFormatPrompt,
+    )
     if (extraInstruction != null) {
       instruction = "$instruction\n\n$extraInstruction"
     }
@@ -115,28 +126,44 @@ class AiService(
   suspend fun translateSubtitle(
     content: String,
     targetLanguage: String,
+    subtitleFormat: String? = null,
     onProgress: (Float) -> Unit = {}
   ): Result<String> = withContext(Dispatchers.IO) {
     try {
-      // Split by empty lines to get subtitle blocks
-      // Handle both CRLF and LF
-      val blocks = content.split(Regex("(\\r?\\n){2,}")).filter { it.isNotBlank() }
-      if (blocks.isEmpty()) return@withContext Result.success(content)
+      val normalizedContent = content.replace("\r\n", "\n")
+      val chunks = when (subtitleFormat?.lowercase(Locale.ROOT)) {
+        "srt", "vtt", "sbv" -> normalizedContent
+          .split(Regex("\n{2,}"))
+          .map(String::trim)
+          .filter { it.isNotBlank() }
+        else -> normalizedContent
+          .lines()
+          .chunked(200)
+          .map { it.joinToString("\n").trim() }
+          .filter { it.isNotBlank() }
+      }
 
-      val chunkSize = 30 // Translate 30 blocks at a time
-      val totalChunks = (blocks.size + chunkSize - 1) / chunkSize
-      val translatedBlocks = mutableListOf<String>()
+      if (chunks.isEmpty()) return@withContext Result.success(content)
+
+      val chunkSize = 30
+      val totalChunks = (chunks.size + chunkSize - 1) / chunkSize
+      val translatedChunks = mutableListOf<String>()
 
       for (i in 0 until totalChunks) {
         val start = i * chunkSize
-        val end = minOf(start + chunkSize, blocks.size)
-        val chunk = blocks.subList(start, end).joinToString("\n\n")
+        val end = minOf(start + chunkSize, chunks.size)
+        val chunk = chunks.subList(start, end).joinToString("\n\n")
 
-        val extra = "TARGET LANGUAGE: $targetLanguage"
+        val extra = buildString {
+          append("TARGET LANGUAGE: $targetLanguage")
+          append("\n")
+          append("OUTPUT FORMAT: keep the exact subtitle format and structure of the original file.")
+          subtitleFormat?.let { append("\nSOURCE FORMAT: .$it") }
+        }
+
         val result = generateWithAi(chunk, AiTask.TRANSLATE, extra)
-        
         result.onSuccess { translatedChunk ->
-          translatedBlocks.add(translatedChunk.trim())
+          translatedChunks.add(translatedChunk.trim())
         }.onFailure { error ->
           return@withContext Result.failure(error)
         }
@@ -144,7 +171,7 @@ class AiService(
         onProgress((i + 1).toFloat() / totalChunks)
       }
 
-      Result.success(translatedBlocks.joinToString("\n\n"))
+      Result.success(translatedChunks.joinToString("\n\n"))
     } catch (e: Exception) {
       Log.e(TAG, "Subtitle translation failed", e)
       Result.failure(e)

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Checkbox
@@ -55,6 +56,9 @@ fun SubtitlesSheet(
   onTranslateSubtitle: (TrackNode, String) -> Unit,
   isTranslating: Boolean,
   translationProgress: Float,
+  translationEnabled: Boolean,
+  translatingTrackId: Int? = null,
+  translatingTrackName: String = "",
   modifier: Modifier = Modifier,
 ) {
   val items = remember(tracks) {
@@ -134,7 +138,7 @@ fun SubtitlesSheet(
           verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall)
         ) {
           Text(
-            "Translating... ${(translationProgress * 100).toInt()}%",
+            "Translating ${translatingTrackName}... ${(translationProgress * 100).toInt()}%",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.primary
           )
@@ -156,7 +160,9 @@ fun SubtitlesSheet(
                 isExternal = track.external == true,
                 onToggle = { onToggleSubtitle(track.id) },
                 onRemove = { onRemoveSubtitle(track.id) },
-                onTranslate = { showLanguagePicker = track }
+                onTranslate = { if (translationEnabled) showLanguagePicker = track },
+                translationEnabled = translationEnabled,
+                isCurrentlyTranslating = track.id == translatingTrackId,
               )
             }
             is SubtitleItem.Header -> {
@@ -199,6 +205,8 @@ fun SubtitleTrackRow(
   onToggle: () -> Unit,
   onRemove: () -> Unit,
   onTranslate: () -> Unit,
+  translationEnabled: Boolean,
+  isCurrentlyTranslating: Boolean = false,
   modifier: Modifier = Modifier,
 ) {
   Row(
@@ -212,8 +220,17 @@ fun SubtitleTrackRow(
     Checkbox(checked = isSelected, onCheckedChange = { onToggle() })
     Text(title, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f))
     
+    if (isCurrentlyTranslating) {
+      androidx.compose.material3.CircularProgressIndicator(
+        modifier = Modifier.size(MaterialTheme.spacing.large),
+        strokeWidth = MaterialTheme.spacing.smaller,
+      )
+    }
+    
     if (isExternal) {
-      IconButton(onClick = onTranslate) { Icon(Icons.Default.Language, contentDescription = "Translate") }
+      if (translationEnabled) {
+        IconButton(onClick = onTranslate) { Icon(Icons.Default.Translate, contentDescription = "Translate") }
+      }
       IconButton(onClick = onRemove) { Icon(Icons.Default.Delete, contentDescription = null) }
     }
   }

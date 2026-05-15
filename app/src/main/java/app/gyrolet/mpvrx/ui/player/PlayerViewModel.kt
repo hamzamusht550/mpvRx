@@ -69,6 +69,7 @@ import java.io.File
 import java.security.MessageDigest
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
+import android.webkit.MimeTypeMap
 import app.gyrolet.mpvrx.preferences.AdvancedPreferences
 import app.gyrolet.mpvrx.preferences.DecoderPreferences
 import kotlin.properties.ReadOnlyProperty
@@ -164,6 +165,12 @@ class PlayerViewModel(
 
   private val _isTranslatingSub = MutableStateFlow(false)
   val isTranslatingSub: StateFlow<Boolean> = _isTranslatingSub.asStateFlow()
+
+  private val _translatingTrackId = MutableStateFlow<Int?>(null)
+  val translatingTrackId: StateFlow<Int?> = _translatingTrackId.asStateFlow()
+
+  private val _translatingTrackName = MutableStateFlow("")
+  val translatingTrackName: StateFlow<String> = _translatingTrackName.asStateFlow()
 
   private val _translationProgress = MutableStateFlow(0f)
   val translationProgress: StateFlow<Float> = _translationProgress.asStateFlow()
@@ -1261,10 +1268,18 @@ class PlayerViewModel(
   fun translateSubtitle(track: TrackNode, targetLanguage: String) {
     val externalPath = track.externalFilename ?: return
     val uriString = mpvPathToUriMap[externalPath] ?: externalPath
-    val uri = Uri.parse(uriString)
+    
+    // Convert file path to proper URI if needed
+    val uri = if (uriString.startsWith("/")) {
+      File(uriString).toUri()
+    } else {
+      Uri.parse(uriString)
+    }
 
     viewModelScope.launch(Dispatchers.IO) {
       _isTranslatingSub.value = true
+      _translatingTrackId.value = track.id
+      _translatingTrackName.value = getFileNameFromUri(uri)?.let { it.substringBeforeLast(".") }?.lowercase() ?: "subtitle"
       _translationProgress.value = 0f
 
       try {
@@ -1272,37 +1287,22 @@ class PlayerViewModel(
           it.readBytes().decodeToString()
         } ?: throw Exception("Could not read subtitle file")
 
-        val result = aiService.translateSubtitle(content, targetLanguage) { progress ->
+        val originalFileName = getFileNameFromUri(uri) ?: "subtitle.srt"
+        val extension = originalFileName.substringAfterLast('.', "srt")
+
+        val result = aiService.translateSubtitle(content, targetLanguage, extension) { progress ->
           _translationProgress.value = progress
         }
 
         result.onSuccess { translatedContent ->
-          val originalFileName = getFileNameFromUri(uri) ?: "subtitle.srt"
           val baseName = originalFileName.substringBeforeLast(".")
-          val extension = originalFileName.substringAfterLast(".", "srt")
           val newFileName = "${baseName}.${targetLanguage}.AI.${extension}"
 
-          // Attempt to resolve real path to save in the same directory
-          val mpvPath = uri.resolveUri(host.context)
-          val targetFile = if (mpvPath != null && !mpvPath.startsWith("fd://")) {
-            val originalFile = File(mpvPath)
-            val parent = originalFile.parentFile
-            // Check if we can write to the original parent directory
-            if (parent?.exists() == true && (parent.canWrite() || uri.scheme == "file")) {
-              File(parent, newFileName)
-            } else null
-          } else null
-
-          // Fallback to app's external subtitles directory if original is inaccessible
-          val finalTargetFile = targetFile ?: File(
-            File(host.context.getExternalFilesDir(null), "Subtitles"),
-            newFileName
-          ).apply { parentFile?.mkdirs() }
-
-          finalTargetFile.writeText(translatedContent)
+          val savedUri = saveTranslatedSubtitle(uri, newFileName, extension, targetLanguage, translatedContent)
+            ?: throw Exception("Could not save translated subtitle")
 
           withContext(Dispatchers.Main) {
-            addSubtitle(Uri.fromFile(finalTargetFile), select = true)
+            addSubtitle(savedUri, select = true)
             showToast("Translation complete: $newFileName")
           }
         }.onFailure { error ->
@@ -1316,9 +1316,62 @@ class PlayerViewModel(
         }
       } finally {
         _isTranslatingSub.value = false
+        _translatingTrackId.value = null
+        _translatingTrackName.value = ""
         _translationProgress.value = 0f
       }
     }
+  }
+
+  private fun saveTranslatedSubtitle(
+    originalUri: Uri,
+    newFileName: String,
+    extension: String,
+    targetLanguage: String,
+    translatedContent: String,
+  ): Uri? {
+    if (originalUri.scheme == "file") {
+      val parent = originalUri.path?.let { File(it).parentFile }
+      if (parent?.exists() == true) {
+        val saved = File(parent, newFileName).also { it.writeText(translatedContent) }.toUri()
+        // Clean up any misnamed file (just language.AI.ext) in the same directory
+        val misnamed = File(parent, "${targetLanguage}.AI.${extension}")
+        if (misnamed.exists() && misnamed.name != newFileName) misnamed.delete()
+        return saved
+      }
+    }
+
+    if (originalUri.scheme == "content") {
+      val sourceDocument = DocumentFile.fromSingleUri(host.context, originalUri)
+      val parentDocument = sourceDocument?.parentFile
+      if (parentDocument?.canWrite() == true) {
+        val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+          ?: "text/plain"
+        val targetDocument = parentDocument.findFile(newFileName)
+          ?: parentDocument.createFile(mimeType, newFileName)
+
+        if (targetDocument != null) {
+          host.context.contentResolver.openOutputStream(targetDocument.uri)?.use { output ->
+            output.write(translatedContent.toByteArray())
+          }
+          // Clean up any misnamed file in the same directory
+          parentDocument.findFile("${targetLanguage}.AI.${extension}")?.let { misnamed ->
+            if (misnamed.uri != targetDocument.uri) misnamed.delete()
+          }
+          return targetDocument.uri
+        }
+      }
+    }
+
+    val fallbackDir = host.context.getExternalFilesDir(null) ?: host.context.filesDir
+    val backupFile = File(File(fallbackDir, "Subtitles"), newFileName).apply {
+      parentFile?.mkdirs()
+    }
+    backupFile.writeText(translatedContent)
+    // Clean up any misnamed file in fallback dir
+    val misnamed = File(File(fallbackDir, "Subtitles"), "${targetLanguage}.AI.${extension}")
+    if (misnamed.exists() && misnamed.name != newFileName) misnamed.delete()
+    return backupFile.toUri()
   }
 
   private fun scanLocalSubtitles(mediaTitle: String) {

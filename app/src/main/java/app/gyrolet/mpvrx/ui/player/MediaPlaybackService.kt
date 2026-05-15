@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package app.gyrolet.mpvrx.ui.player
 
 import android.annotation.SuppressLint
