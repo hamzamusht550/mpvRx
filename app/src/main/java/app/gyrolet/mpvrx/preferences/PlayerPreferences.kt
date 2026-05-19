@@ -96,10 +96,10 @@ class PlayerPreferences(
   val customButtons = preferenceStore.getString("custom_buttons_json", "[]")
 
   // Ambience Mode
-  val ambientBlurSamples = preferenceStore.getInt("ambient_blur_samples", 18)
-  val ambientMaxRadius = preferenceStore.getFloat("ambient_max_radius", 0.18f)
-  val ambientGlowIntensity = preferenceStore.getFloat("ambient_glow_intensity", 1.4f)
-  val ambientSatBoost = preferenceStore.getFloat("ambient_sat_boost", 1.2f)
+  val ambientBlurSamples = preferenceStore.getInt("ambient_blur_samples", 12)
+  val ambientMaxRadius = preferenceStore.getFloat("ambient_max_radius", 0.15f)
+  val ambientGlowIntensity = preferenceStore.getFloat("ambient_glow_intensity", 1.2f)
+  val ambientSatBoost = preferenceStore.getFloat("ambient_sat_boost", 1.0f)
   val ambientDitherNoise = preferenceStore.getFloat("ambient_dither_noise", 0.0f)
   val ambientBezelDepth = preferenceStore.getFloat("ambient_bezel_depth", 0.0f)
   val ambientVignetteStrength = preferenceStore.getFloat("ambient_vignette_strength", 0.5f)
@@ -112,6 +112,7 @@ class PlayerPreferences(
   val ambientExtendDetailProtection = preferenceStore.getFloat("ambient_extend_detail_protection", 0.60f)
   val ambientExtendGlowMix = preferenceStore.getFloat("ambient_extend_glow_mix", 0.20f)
   val isAmbientEnabled = preferenceStore.getBoolean("ambient_enabled", false)
+  val ambientBatterySaver = preferenceStore.getBoolean("ambient_battery_saver", false)
 
   // ── Overlay visibility controls ───────────────────────────────────────────
   /** Show the vertical volume pill while swiping for volume. */

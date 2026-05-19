@@ -130,6 +130,30 @@ fun AmbientSheet(
             opacity = opacity,
         )
     }
+    val isEco = when (ambientMode) {
+        AmbientVisualMode.GLOW -> matchesGlowPreset(
+            preset = AmbientShaderPresets.glowEco,
+            blurSamples = blurSamples,
+            maxRadius = maxRadius,
+            glowIntensity = glowIntensity,
+            satBoost = satBoost,
+            vignetteStrength = vignetteStrength,
+            warmth = warmth,
+            fadeCurve = fadeCurve,
+            opacity = opacity,
+        )
+        AmbientVisualMode.FRAME_EXTEND -> matchesFrameExtendPreset(
+            preset = AmbientShaderPresets.frameExtendEco,
+            sampleBudget = blurSamples,
+            extendStrength = frameExtendStrength,
+            detailProtection = frameExtendDetailProtection,
+            glowMix = frameExtendGlowMix,
+            ditherNoise = ditherNoise,
+            bezelDepth = bezelDepth,
+            vignetteStrength = vignetteStrength,
+            opacity = opacity,
+        )
+    }
 
     val configuration = LocalConfiguration.current
     val customMaxHeight = if (configuration.orientation == Configuration.ORIENTATION_PORTRAIT) {
@@ -167,9 +191,19 @@ fun AmbientSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = MaterialTheme.spacing.medium),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                FilledTonalButton(
+                    onClick = { viewModel.applyAmbientProfileEco() },
+                    modifier = Modifier.weight(1f),
+                    colors = if (isEco) ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                    ) else ButtonDefaults.filledTonalButtonColors(),
+                ) {
+                    Text("Eco", fontWeight = FontWeight.Bold)
+                }
                 FilledTonalButton(
                     onClick = { viewModel.applyAmbientProfileFast() },
                     modifier = Modifier.weight(1f),

@@ -2,9 +2,12 @@ package app.gyrolet.mpvrx.ui.player
 
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.BroadcastReceiver
 import android.content.pm.ActivityInfo
 import android.media.AudioManager
 import android.net.Uri
+import android.os.BatteryManager
 import android.provider.OpenableColumns
 import android.provider.Settings
 import android.util.DisplayMetrics
@@ -698,6 +701,19 @@ class PlayerViewModel(
    */
   @Volatile private var thermalHeadroom: Float = 1.0f
 
+  private val _isAmbientBatterySaver = MutableStateFlow(playerPreferences.ambientBatterySaver.get())
+  val isAmbientBatterySaver: StateFlow<Boolean> = _isAmbientBatterySaver.asStateFlow()
+  private var ambientWasOnBattery = false
+  private var ambientPreBatterySaverSamples: Int = 18
+  private var ambientPreBatterySaverRadius: Float = 0.18f
+  private var ambientPreBatterySaverIntensity: Float = 1.4f
+  private var ambientPreBatterySaverSatBoost: Float = 1.2f
+  private var ambientPreBatterySaverVignette: Float = 0.5f
+  private var ambientPreBatterySaverWarmth: Float = 0.0f
+  private var ambientPreBatterySaverFadeCurve: Float = 1.5f
+  private var ambientPreBatterySaverOpacity: Float = 1.0f
+  private var batteryReceiver: BroadcastReceiver? = null
+
   init {
     // Track selection is now handled by TrackSelector in PlayerActivity
 
@@ -741,6 +757,18 @@ class PlayerViewModel(
     viewModelScope.launch {
       playerPreferences.customButtons.changes().drop(1).collect {
         setupCustomButtons()
+      }
+    }
+
+    // Observe ambient battery saver preference
+    viewModelScope.launch {
+      playerPreferences.ambientBatterySaver.changes().collect { enabled ->
+        _isAmbientBatterySaver.value = enabled
+        if (enabled && _isAmbientEnabled.value) {
+          applyBatterySaverPolicy()
+        } else if (!enabled && ambientWasOnBattery && _isAmbientEnabled.value) {
+          restoreFromBatterySaver()
+        }
       }
     }
 
@@ -4000,6 +4028,76 @@ class PlayerViewModel(
     }
   }
 
+  /** Eco profile — minimal GPU cost, negligible battery impact. */
+  fun applyAmbientProfileEco() {
+    when (_ambientVisualMode.value) {
+      AmbientVisualMode.GLOW -> {
+        val preset = AmbientShaderPresets.glowEco
+        updateAmbientParams(
+          blurSamples = preset.blurSamples,
+          maxRadius = preset.maxRadius,
+          glowIntensity = preset.glowIntensity,
+          satBoost = preset.satBoost,
+          vignetteStrength = preset.vignetteStrength,
+          warmth = preset.warmth,
+          fadeCurve = preset.fadeCurve,
+          opacity = preset.opacity,
+        )
+      }
+      AmbientVisualMode.FRAME_EXTEND -> applyFrameExtendPreset(AmbientShaderPresets.frameExtendEco)
+    }
+  }
+
+  fun updateAmbientBatterySaver(enabled: Boolean) {
+    _isAmbientBatterySaver.value = enabled
+    playerPreferences.ambientBatterySaver.set(enabled)
+    if (enabled && _isAmbientEnabled.value) {
+      applyBatterySaverPolicy()
+    } else if (!enabled && ambientWasOnBattery && _isAmbientEnabled.value) {
+      restoreFromBatterySaver()
+    }
+  }
+
+  private fun applyBatterySaverPolicy() {
+    if (_ambientBlurSamples.value <= 4) return
+    ambientPreBatterySaverSamples = _ambientBlurSamples.value
+    ambientPreBatterySaverRadius = _ambientMaxRadius.value
+    ambientPreBatterySaverIntensity = _ambientGlowIntensity.value
+    ambientPreBatterySaverSatBoost = _ambientSatBoost.value
+    ambientPreBatterySaverVignette = _ambientVignetteStrength.value
+    ambientPreBatterySaverWarmth = _ambientWarmth.value
+    ambientPreBatterySaverFadeCurve = _ambientFadeCurve.value
+    ambientPreBatterySaverOpacity = _ambientOpacity.value
+    ambientWasOnBattery = true
+    applyAmbientProfileEco()
+    playerUpdate.value = PlayerUpdates.ShowText("Ambient: Battery Saver ON")
+  }
+
+  private fun restoreFromBatterySaver() {
+    if (!ambientWasOnBattery) return
+    ambientWasOnBattery = false
+    updateAmbientParams(
+      blurSamples = ambientPreBatterySaverSamples,
+      maxRadius = ambientPreBatterySaverRadius,
+      glowIntensity = ambientPreBatterySaverIntensity,
+      satBoost = ambientPreBatterySaverSatBoost,
+      vignetteStrength = ambientPreBatterySaverVignette,
+      warmth = ambientPreBatterySaverWarmth,
+      fadeCurve = ambientPreBatterySaverFadeCurve,
+      opacity = ambientPreBatterySaverOpacity,
+    )
+    playerUpdate.value = PlayerUpdates.ShowText("Ambient: Battery Saver OFF")
+  }
+
+  fun onBatteryStateChanged(isCharging: Boolean) {
+    if (!_isAmbientBatterySaver.value || !_isAmbientEnabled.value) return
+    if (isCharging) {
+      restoreFromBatterySaver()
+    } else {
+      applyBatterySaverPolicy()
+    }
+  }
+
   fun updateAmbientStretch() {
     if (!_isAmbientEnabled.value) return
 
@@ -4068,13 +4166,15 @@ class PlayerViewModel(
       val opacity = _ambientOpacity.value
 
       // ── Generate GLSL shader ───────────────────────────────────────────────
+      val ecoMode = samples <= 4
       val shaderCode = buildAmbientShader(
         sx = sx, sy = sy,
         blurSamples = samples, maxRadius = radius,
         glowIntensity = glow, satBoost = sat,
         ditherNoise = dither, bezelDepth = bezel,
         vignetteStrength = vignette, warmth = warmth,
-        fadeCurve = curve, opacity = opacity
+        fadeCurve = curve, opacity = opacity,
+        ecoMode = ecoMode,
       )
 
       // ── Shader parameter cache ─────────────────────────────────────────────
@@ -4117,7 +4217,8 @@ class PlayerViewModel(
     glowIntensity: Float, satBoost: Float,
     ditherNoise: Float, bezelDepth: Float,
     vignetteStrength: Float, warmth: Float,
-    fadeCurve: Float, opacity: Float
+    fadeCurve: Float, opacity: Float,
+    ecoMode: Boolean = false,
   ): String {
     val context = AmbientRenderContext(scaleX = sx, scaleY = sy)
     val shared =
@@ -4139,6 +4240,7 @@ class PlayerViewModel(
             satBoost = satBoost,
             warmth = warmth,
             fadeCurve = fadeCurve,
+            ecoMode = ecoMode,
           )
         AmbientVisualMode.FRAME_EXTEND ->
           AmbientFrameExtendShaderSpec(
@@ -4149,6 +4251,7 @@ class PlayerViewModel(
             detailProtection = _frameExtendDetailProtection.value,
             glowMix = _frameExtendGlowMix.value,
             ditherNoise = ditherNoise,
+            ecoMode = ecoMode,
           )
       }
 

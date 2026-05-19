@@ -55,10 +55,10 @@ object ThermalMonitor {
    *
    * | Headroom  | Severity | Max budget |
    * |-----------|----------|------------|
-   * | ≥ 0.70    | None     | uncapped   |
-   * | 0.50–0.70 | Mild     | 18         |
-   * | 0.30–0.50 | Moderate | 12         |
-   * | < 0.30    | Severe   | 8          |
+   * | ≥ 0.80    | None     | uncapped   |
+   * | 0.60–0.80 | Mild     | 12         |
+   * | 0.40–0.60 | Moderate | 8          |
+   * | < 0.40    | Severe   | 4 (Eco)    |
    *
    * @param baselineBudget The sample budget configured by the user (e.g. 24).
    * @param headroom The current thermal headroom from [getHeadroom].
@@ -66,9 +66,9 @@ object ThermalMonitor {
    */
   fun clampAmbientSampleBudget(baselineBudget: Int, headroom: Float): Int =
     when {
-      headroom < 0.30f -> baselineBudget.coerceAtMost(8)
-      headroom < 0.50f -> baselineBudget.coerceAtMost(12)
-      headroom < 0.70f -> baselineBudget.coerceAtMost(18)
+      headroom < 0.40f -> baselineBudget.coerceAtMost(4)
+      headroom < 0.60f -> baselineBudget.coerceAtMost(8)
+      headroom < 0.80f -> baselineBudget.coerceAtMost(12)
       else -> baselineBudget
     }
 
