@@ -253,17 +253,47 @@ class TrackSelector(
       val ignoreSubs = listOf("signs", "songs", "lyrics", "forced", "sdh", "colored", "karaoke")
       val subTracks = tracks.filter { it.type == "sub" }
 
-      // PASS 00: EXTERNAL TRACK OVERRIDE (Protects manually loaded subtitle files)
-      for (track in subTracks) {
-        if (track.external) {
+      // PASS 00: EXTERNAL TRACK OVERRIDE (Protects manually loaded subtitle files & respects language preference)
+      val externalTracks = subTracks.filter { it.external }
+      if (externalTracks.isNotEmpty()) {
+        // 1. Try to find an external track matching preferred languages in order
+        for (prefLang in preferredLangs) {
+          for (track in externalTracks) {
+            if (track.lang == prefLang || track.lang.startsWith(prefLang)) {
+              if (currentSid == track.id) {
+                Log.d(TAG, "Smart Sub: Preferred External Subtitle Detected (id=${track.id}, lang=${track.lang}) [Already Active. Skipping Change.]")
+              } else {
+                Log.d(TAG, "Smart Sub: Preferred External Subtitle Detected (id=${track.id}, lang=${track.lang}) [Applied]")
+                setTrackSelectionId("sid", track.id)
+              }
+              return
+            }
+          }
+        }
+
+        // 2. Try to find manually loaded subtitle files (usually have empty or "und" lang)
+        val unknownLangCodes = setOf("", "und", "zxx")
+        for (track in externalTracks) {
+          if (track.lang in unknownLangCodes) {
             if (currentSid == track.id) {
-              Log.d(TAG, "Smart Sub: External Subtitle Detected (id=${track.id}) [Already Active. Skipping Change.]")
+              Log.d(TAG, "Smart Sub: Manual/Undetermined External Subtitle Detected (id=${track.id}) [Already Active. Skipping Change.]")
             } else {
-              Log.d(TAG, "Smart Sub: External Subtitle Detected (id=${track.id}) [Applied]")
+              Log.d(TAG, "Smart Sub: Manual/Undetermined External Subtitle Detected (id=${track.id}) [Applied]")
               setTrackSelectionId("sid", track.id)
             }
             return
           }
+        }
+
+        // 3. Fallback: select the first available external track
+        val fallbackTrack = externalTracks.first()
+        if (currentSid == fallbackTrack.id) {
+          Log.d(TAG, "Smart Sub: Fallback External Subtitle Detected (id=${fallbackTrack.id}) [Already Active. Skipping Change.]")
+        } else {
+          Log.d(TAG, "Smart Sub: Fallback External Subtitle Detected (id=${fallbackTrack.id}) [Applied]")
+          setTrackSelectionId("sid", fallbackTrack.id)
+        }
+        return
       }
 
       // PASS A0: KEEP FILE'S NATIVE DEFAULT JAPANESE SUBS FOR ANIME

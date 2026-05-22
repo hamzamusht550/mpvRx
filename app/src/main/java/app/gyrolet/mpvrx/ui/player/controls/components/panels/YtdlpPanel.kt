@@ -1,27 +1,57 @@
 package app.gyrolet.mpvrx.ui.player.controls.components.panels
 
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.gyrolet.mpvrx.preferences.YtdlPreferences
+import app.gyrolet.mpvrx.preferences.preference.collectAsState
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
+import app.gyrolet.mpvrx.ui.player.controls.panelCardsColors
 import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlpManager
 import app.gyrolet.mpvrx.ui.theme.spacing
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import java.io.File
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun YtdlpPanel(
-  modifier: Modifier = Modifier
+  onDismissRequest: () -> Unit,
+  modifier: Modifier = Modifier,
 ) {
   val context = LocalContext.current
+  val clipboardManager = LocalClipboardManager.current
   val scope = rememberCoroutineScope()
   var logs by remember { mutableStateOf("") }
-  val scrollState = rememberScrollState()
   var isRunning by remember { mutableStateOf(false) }
+  var selectedTab by remember { mutableIntStateOf(0) }
+
+  val ytdlPreferences = koinInject<YtdlPreferences>()
+  val ytdlQuality by ytdlPreferences.ytdlQuality.collectAsState()
+  val preferH264 by ytdlPreferences.preferH264.collectAsState()
+  val writeSubs by ytdlPreferences.writeSubs.collectAsState()
+  val writeAutoSubs by ytdlPreferences.writeAutoSubs.collectAsState()
 
   val ytdlDir = remember { YtdlpManager.getYtdlDir(context) }
   var hasYtdlp by remember { mutableStateOf(File(ytdlDir, "yt-dlp").exists()) }
@@ -32,92 +62,377 @@ fun YtdlpPanel(
     }
   }
 
-  LaunchedEffect(logs) {
-    scrollState.animateScrollTo(scrollState.maxValue)
+  val qualityLabel = remember(ytdlQuality) {
+    if (ytdlQuality == -1) "Any" else "${ytdlQuality}p"
   }
 
   DraggablePanel(
-    modifier = modifier
-  ) {
-    Column(
-      modifier = Modifier
-        .fillMaxSize()
-        .padding(MaterialTheme.spacing.medium),
-      verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.medium)
-    ) {
-      Text(
-        text = "yt-dlp Manager",
-        style = MaterialTheme.typography.headlineSmall
-      )
-
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.small)
-      ) {
-        Button(
-          onClick = {
-            scope.launch {
-              isRunning = true
-              logs = ""
-              YtdlpManager.runInstall(context) { line ->
-                logs += line
-              }
-              isRunning = false
-            }
-          },
-          enabled = !isRunning,
-          modifier = Modifier.weight(1f)
-        ) {
-          Text("Install")
-        }
-
-        Button(
-          onClick = {
-            scope.launch {
-              isRunning = true
-              logs = ""
-              YtdlpManager.runUpdate(context) { line ->
-                logs += line
-              }
-              isRunning = false
-            }
-          },
-          enabled = !isRunning && hasYtdlp,
-          modifier = Modifier.weight(1f)
-        ) {
-          Text("Update")
-        }
-      }
-
-      Surface(
-        modifier = Modifier
-          .weight(1f)
-          .fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = MaterialTheme.shapes.medium
-      ) {
-        Column(
+    modifier = modifier,
+    header = {
+      Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween,
           modifier = Modifier
-            .padding(MaterialTheme.spacing.small)
-            .verticalScroll(scrollState)
+            .fillMaxWidth()
+            .padding(horizontal = MaterialTheme.spacing.medium)
+            .padding(top = MaterialTheme.spacing.small, bottom = MaterialTheme.spacing.extraSmall),
         ) {
           Text(
-            text = logs.ifEmpty { "Ready..." },
-            style = MaterialTheme.typography.bodySmall,
-            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+            text = "yt-dlp Manager",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold
+          )
+          IconButton(onClick = onDismissRequest) {
+            Icon(Icons.Default.Close, null, modifier = Modifier.size(24.dp))
+          }
+        }
+        
+        // Expressive M3 Tabs
+        TabRow(
+          selectedTabIndex = selectedTab,
+          containerColor = Color.Transparent,
+          divider = { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)) },
+          modifier = Modifier.padding(horizontal = 8.dp)
+        ) {
+          Tab(
+            selected = selectedTab == 0,
+            onClick = { selectedTab = 0 },
+            text = { Text("Settings", fontWeight = FontWeight.SemiBold) }
+          )
+          Tab(
+            selected = selectedTab == 1,
+            onClick = { selectedTab = 1 },
+            text = { 
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+              ) {
+                Text("Console", fontWeight = FontWeight.SemiBold)
+                if (isRunning) {
+                  Box(
+                    modifier = Modifier
+                      .size(6.dp)
+                      .clip(RoundedCornerShape(3.dp))
+                      .background(MaterialTheme.colorScheme.primary)
+                  )
+                }
+              }
+            }
           )
         }
       }
+    }
+  ) {
+    Column(
+      modifier = Modifier
+        .padding(MaterialTheme.spacing.medium)
+        .animateContentSize(),
+      verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.medium),
+    ) {
+      if (selectedTab == 0) {
+        // Tab 1: Settings Panel
+        
+        // Compact Status Indicator
+        Surface(
+          color = if (hasYtdlp) MaterialTheme.colorScheme.primaryContainer
+                  else MaterialTheme.colorScheme.errorContainer,
+          shape = RoundedCornerShape(16.dp),
+          tonalElevation = 0.dp,
+        ) {
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.small),
+          ) {
+            Icon(
+              if (hasYtdlp) Icons.Filled.CheckCircle else Icons.Default.CloudDownload,
+              contentDescription = null,
+              modifier = Modifier.size(20.dp),
+              tint = if (hasYtdlp) MaterialTheme.colorScheme.onPrimaryContainer
+                     else MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Text(
+              text = if (hasYtdlp) "yt-dlp core is installed & active" else "yt-dlp core not installed",
+              style = MaterialTheme.typography.bodyMedium,
+              fontWeight = FontWeight.Bold,
+              color = if (hasYtdlp) MaterialTheme.colorScheme.onPrimaryContainer
+                      else MaterialTheme.colorScheme.onErrorContainer,
+            )
+          }
+        }
 
-      if (isRunning) {
-        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        // Quick Quality Chip Panel
+        val cardsColors = panelCardsColors()
+        Surface(
+          shape = MaterialTheme.shapes.large,
+          color = cardsColors.containerColor,
+          tonalElevation = 0.dp,
+          border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+          ),
+        ) {
+          Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
+          ) {
+            Text(
+              text = "Quick Quality Selection",
+              style = MaterialTheme.typography.bodyMedium,
+              fontWeight = FontWeight.Bold,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.padding(start = MaterialTheme.spacing.extraSmall),
+            )
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              val quickQualities = listOf(-1 to "Any", 1080 to "1080p", 720 to "720p", 480 to "480p")
+              FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.weight(1f)
+              ) {
+                quickQualities.forEach { (level, label) ->
+                  FilterChip(
+                    selected = ytdlQuality == level,
+                    onClick = {
+                      ytdlPreferences.ytdlQuality.set(level)
+                      updateFormatString(ytdlPreferences, level, preferH264)
+                    },
+                    label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                    leadingIcon = if (ytdlQuality == level) {
+                      { Icon(Icons.Default.Check, null, modifier = Modifier.size(14.dp)) }
+                    } else null,
+                  )
+                }
+              }
+              
+              Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier.padding(start = 4.dp)
+              ) {
+                Text(
+                  text = qualityLabel,
+                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.ExtraBold,
+                  color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+              }
+            }
+          }
+        }
+
+        // Subtitles Switches Card
+        Surface(
+          shape = MaterialTheme.shapes.large,
+          color = cardsColors.containerColor,
+          tonalElevation = 0.dp,
+          border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+          ),
+        ) {
+          Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+          ) {
+            Text(
+              text = "Quick Subtitle Config",
+              style = MaterialTheme.typography.bodyMedium,
+              fontWeight = FontWeight.Bold,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.padding(start = MaterialTheme.spacing.extraSmall, bottom = 2.dp),
+            )
+            
+            // Subtitle download toggle
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+              Column(modifier = Modifier.weight(1f)) {
+                Text("Download Subtitles", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Text("Fetch subs from stream sources", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              }
+              Switch(
+                checked = writeSubs,
+                onCheckedChange = { ytdlPreferences.writeSubs.set(it) }
+              )
+            }
+            
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+            
+            // Auto subtitles toggle
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+              Column(modifier = Modifier.weight(1f)) {
+                Text("Auto-Generated Captions", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Text("Include auto-captions/transcripts", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              }
+              Switch(
+                checked = writeAutoSubs,
+                onCheckedChange = { ytdlPreferences.writeAutoSubs.set(it) }
+              )
+            }
+          }
+        }
+
+        // Installer Buttons
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.small)
+        ) {
+          Button(
+            onClick = {
+              scope.launch {
+                selectedTab = 1 // Switch to console logs view immediately so user sees logs!
+                isRunning = true
+                logs = ""
+                YtdlpManager.runInstall(context) { line ->
+                  logs += line
+                }
+                isRunning = false
+              }
+            },
+            enabled = !isRunning,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.weight(1f)
+          ) {
+            Icon(Icons.Default.CloudDownload, null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Install Core")
+          }
+
+          OutlinedButton(
+            onClick = {
+              scope.launch {
+                selectedTab = 1 // Switch to console logs view immediately
+                isRunning = true
+                logs = ""
+                YtdlpManager.runUpdate(context) { line ->
+                  logs += line
+                }
+                isRunning = false
+              }
+            },
+            enabled = !isRunning && hasYtdlp,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.weight(1f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+          ) {
+            Icon(Icons.Default.Update, null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Update Core")
+          }
+        }
+      } else {
+        // Tab 2: Console Terminal emulator view
+        Column(
+          modifier = Modifier.fillMaxWidth(),
+          verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          // Terminal Controls Row
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text(
+              text = if (isRunning) "Installing/Updating..." else "Terminal Idle",
+              style = MaterialTheme.typography.bodySmall,
+              fontWeight = FontWeight.Bold,
+              color = if (isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            Row(
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              IconButton(
+                onClick = {
+                  clipboardManager.setText(AnnotatedString(logs))
+                  Toast.makeText(context, "Copied logs to clipboard", Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier.size(32.dp)
+              ) {
+                Icon(
+                  imageVector = Icons.Default.ContentCopy,
+                  contentDescription = "Copy logs",
+                  modifier = Modifier.size(16.dp)
+                )
+              }
+              
+              IconButton(
+                onClick = { logs = "" },
+                modifier = Modifier.size(32.dp),
+                enabled = !isRunning
+              ) {
+                Icon(
+                  imageVector = Icons.Default.Delete,
+                  contentDescription = "Clear logs",
+                  modifier = Modifier.size(16.dp)
+                )
+              }
+            }
+          }
+          
+          // Terminal Console output container
+          Surface(
+            color = Color(0xFF0F1419),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+              .fillMaxWidth()
+              .heightIn(max = 240.dp)
+          ) {
+            val terminalScrollState = rememberScrollState()
+            
+            LaunchedEffect(logs) {
+              terminalScrollState.animateScrollTo(terminalScrollState.maxValue)
+            }
+            
+            Box(
+              modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(terminalScrollState)
+                .padding(12.dp)
+            ) {
+              Text(
+                text = logs.ifEmpty { "Console output is ready...\nInstall or update to trigger output." },
+                style = TextStyle(
+                  fontFamily = FontFamily.Monospace,
+                  fontSize = 11.sp,
+                  lineHeight = 15.sp,
+                  color = Color(0xFF00FF99)
+                )
+              )
+            }
+          }
+        }
       }
-
-      Text(
-        text = "Bypass SDK 29+ active (using libpython.so)",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.secondary
-      )
     }
   }
+}
+
+private fun updateFormatString(prefs: YtdlPreferences, quality: Int, preferH264: Boolean) {
+  var qstr = ""
+  if (quality != -1 && preferH264) {
+    qstr = "(bv*[vcodec^=?avc]/bv*[vcodec^=?mp4])[height<=?${quality}]+ba/" +
+        "(b[vcodec^=?avc]/b[vcodec^=?mp4])[height<=?${quality}]"
+  } else if (quality != -1) {
+    qstr = "bv[height<=?${quality}]+ba/b[height<=?${quality}]"
+  } else if (preferH264) {
+    qstr = "(bv*[vcodec^=?avc]/bv*[vcodec^=?mp4])+ba/(b[vcodec^=?avc]/b[vcodec^=?mp4])"
+  }
+  if (qstr.isNotEmpty())
+    qstr += "/bv*+ba/b"
+  prefs.ytdlFormat.set(qstr)
 }

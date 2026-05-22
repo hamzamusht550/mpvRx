@@ -1737,8 +1737,9 @@ private fun CustomStatsPageSixOverlay(
         batteryWattsText  = battery.wattsText,
         batteryTempText   = battery.tempText,
         hdrActive         = runCatching {
-          val hdrProp = MPVLib.getPropertyString("hdr-active")
-          if (hdrProp == "yes") "HDR Active" else "SDR"
+          val transfer = MPVLib.getPropertyString("video-params/transfer")
+          val primaries = MPVLib.getPropertyString("video-params/primaries")
+          if (transfer == "pq" || transfer == "hlg" || primaries == "bt.2020") "HDR Active" else "SDR"
         }.getOrDefault("SDR"),
       )
 

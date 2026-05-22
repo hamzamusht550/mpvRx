@@ -4,7 +4,11 @@ These notes are written in plain English and focus on what changed for real use.
 
 ## 1.3.8
 
-- **Integrated yt-dlp** — Added full yt-dlp integration for downloading audio/video from YouTube and other supported sites directly within the app.
+- **Integrated yt-dlp by [**SunnyVishnu3**](https://github.com/SunnyVishnu3)** — Added full yt-dlp integration for video watching audio/video from YouTube and other supported sites directly within the app (_Dont expect from me to add Download Functionality_). **Note: You need to download yt-dlp first (Settings > Advanced > yt-dlp Manager) before playing YouTube links — don't be clueless.**
+- Fixed Issue of USer defined Colors Filters were not getting Saved and not getting applied through Mpv conf by [**SunnyVishnu3**](https://github.com/SunnyVishnu3)
+- Fixed Gemini AI Error Generating / Translating Subs.
+- Fixed Crashing issue of MpvRx , in a nutshell Ambient mode and Custom lua were not initialized in Sync causing to crash player sometimes
+- That's all for Today Adiosss!!
 
 ## 1.3.7
 

@@ -20,8 +20,8 @@ android {
     applicationId = "app.gyrolet.mpvrx"
     minSdk = 26
     targetSdk = 36
-    versionCode = 137
-    versionName = "1.3.7"
+    versionCode = 138
+    versionName = "1.3.8"
 
     vectorDrawables {
       useSupportLibrary = true
@@ -63,7 +63,10 @@ android {
     abi {
       isEnable = true
       reset()
-      include(listOf("armeabi-v7a", "arm64-v8a") + x86Abis)
+      include("armeabi-v7a", "arm64-v8a")
+      if (enableX86) {
+        include("x86", "x86_64")
+      }
       isUniversalApk = true
     }
   }

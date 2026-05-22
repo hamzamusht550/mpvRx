@@ -101,7 +101,8 @@ object YtdlpManager {
             Log.w(TAG, "yt-dlp not found in ${ytDlpFile.absolutePath}. Subprocess will fail until installed.")
         }
 
-        val ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        val customUa = ytdlPreferences.customUserAgent.get()
+        val ua = if (!customUa.isNullOrBlank()) customUa else "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
         // Create script-opts/ytdl_hook.conf to ensure the script picks up our bridge
         // This is the most reliable way to override ytdl_hook options
@@ -112,6 +113,7 @@ object YtdlpManager {
             val confContent = """
                 ytdl_path=$ytdlBinaryPath
                 all_formats=yes
+                all_subtitles=yes
             """.trimIndent()
             ytdlConf.writeText(confContent)
             Log.d(TAG, "Created ytdl_hook.conf at ${ytdlConf.absolutePath}")
@@ -126,6 +128,8 @@ object YtdlpManager {
         // Use script-opts-append for runtime flexibility
         MPVLib.setOptionString("script-opts-append", "ytdl_hook-path=$ytdlBinaryPath")
         MPVLib.setOptionString("script-opts-append", "ytdl_hook-ytdl_path=$ytdlBinaryPath")
+        MPVLib.setOptionString("script-opts-append", "ytdl_hook-all_formats=yes")
+        MPVLib.setOptionString("script-opts-append", "ytdl_hook-all_subtitles=yes")
         
         val ytdlFormat = ytdlPreferences.ytdlFormat.get()
         if (!ytdlFormat.isNullOrBlank()) {
@@ -134,7 +138,38 @@ object YtdlpManager {
 
         // Global User-Agent to avoid blocks at the network level
         MPVLib.setOptionString("user-agent", ua)
-        MPVLib.setOptionString("ytdl-raw-options", "user-agent=\"$ua\"")
+        
+        // Build ytdl-raw-options
+        val rawOptsList = mutableListOf<String>()
+        rawOptsList.add("user-agent=\"$ua\"")
+        
+        if (ytdlPreferences.writeSubs.get()) {
+            rawOptsList.add("write-subs=")
+        }
+        if (ytdlPreferences.writeAutoSubs.get()) {
+            rawOptsList.add("write-auto-subs=")
+        }
+        
+        val langs = ytdlPreferences.subLangs.get()
+        if (!langs.isNullOrBlank()) {
+            rawOptsList.add("sub-langs=\"$langs\"")
+        } else {
+            rawOptsList.add("sub-langs=\"all\"")
+        }
+
+        val customOpts = ytdlPreferences.customRawOptions.get()
+        if (!customOpts.isNullOrBlank()) {
+            customOpts.split(",").forEach { opt ->
+                val trimmed = opt.trim()
+                if (trimmed.isNotEmpty()) {
+                    rawOptsList.add(trimmed)
+                }
+            }
+        }
+        
+        val rawOptionsString = rawOptsList.joinToString(",")
+        Log.d(TAG, "Setting ytdl-raw-options to: $rawOptionsString")
+        MPVLib.setOptionString("ytdl-raw-options", rawOptionsString)
         MPVLib.setOptionString("script-opts-append", "ytdl_hook-user_agent=\"$ua\"")
 
         Log.d(TAG, "MPV ytdl options set. Binary: $ytdlBinaryPath")
