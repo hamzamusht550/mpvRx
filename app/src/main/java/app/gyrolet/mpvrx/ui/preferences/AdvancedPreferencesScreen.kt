@@ -485,6 +485,28 @@ object AdvancedPreferencesScreen : Screen {
                   backStack.add(app.gyrolet.mpvrx.ui.preferences.CustomButtonScreen)
                 },
               )
+
+              PreferenceDivider()
+
+              Preference(
+                title = { Text("yt-dlp Manager") },
+                summary = {
+                  Text(
+                    "Install and update yt-dlp for streaming support",
+                    color = MaterialTheme.colorScheme.outline
+                  )
+                },
+                icon = {
+                  Icon(
+                    Icons.Default.CloudDownload,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                  )
+                },
+                onClick = {
+                  backStack.add(YtdlpSettingsScreen)
+                },
+              )
             }
           }
           

@@ -26,6 +26,19 @@ android {
 
     buildConfigField("String", "GIT_SHA", "\"${getCommitSha()}\"")
     buildConfigField("int", "GIT_COUNT", getCommitCount())
+
+    externalNativeBuild {
+      cmake {
+        abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+      }
+    }
+  }
+
+  externalNativeBuild {
+    cmake {
+      path = file("src/main/cpp/CMakeLists.txt")
+      version = "3.22.1"
+    }
   }
 
   flavorDimensions += "distribution"

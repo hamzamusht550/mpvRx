@@ -23,6 +23,7 @@ import app.gyrolet.mpvrx.ui.player.controls.components.panels.LuaScriptsPanel
 import app.gyrolet.mpvrx.ui.player.controls.components.panels.SubtitleDelayPanel
 import app.gyrolet.mpvrx.ui.player.controls.components.panels.SubtitleSettingsPanel
 import app.gyrolet.mpvrx.ui.player.controls.components.panels.VideoSettingsPanel
+import app.gyrolet.mpvrx.ui.player.controls.components.panels.YtdlpPanel
 
 @Composable
 fun PlayerPanels(
@@ -65,6 +66,9 @@ fun PlayerPanels(
           viewModel = viewModel,
           onDismissRequest = onDismissRequest,
         )
+      }
+      Panels.Ytdlp -> {
+        YtdlpPanel(onDismissRequest)
       }
     }
   }

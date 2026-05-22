@@ -13,9 +13,11 @@ import app.gyrolet.mpvrx.preferences.AudioPreferences
 import app.gyrolet.mpvrx.preferences.DecoderPreferences
 import app.gyrolet.mpvrx.preferences.PlayerPreferences
 import app.gyrolet.mpvrx.preferences.SubtitlesPreferences
+import app.gyrolet.mpvrx.preferences.YtdlPreferences
 import app.gyrolet.mpvrx.domain.anime4k.Anime4KManager
 import app.gyrolet.mpvrx.domain.hdr.HdrToysManager
 import app.gyrolet.mpvrx.ui.player.PlayerActivity.Companion.TAG
+import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlpManager
 import app.gyrolet.mpvrx.ui.player.controls.components.panels.toColorHexString
 import app.gyrolet.mpvrx.ui.preferences.VulkanUtils
 import `is`.xyz.mpv.BaseMPVView
@@ -35,6 +37,7 @@ class MPVView(
   private val decoderPreferences: DecoderPreferences by inject()
   private val advancedPreferences: AdvancedPreferences by inject()
   private val subtitlesPreferences: SubtitlesPreferences by inject()
+  private val ytdlPreferences: YtdlPreferences by inject()
   private val anime4kManager: Anime4KManager by inject()
   private val hdrToysManager: HdrToysManager by inject()
 
@@ -189,6 +192,7 @@ class MPVView(
 
     setupSubtitlesOptions()
     setupAudioOptions()
+    YtdlpManager.setupMpvOptions(context, ytdlPreferences)
   }
 
   override fun observeProperties() {

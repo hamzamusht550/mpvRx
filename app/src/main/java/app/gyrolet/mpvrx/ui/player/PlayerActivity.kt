@@ -64,6 +64,7 @@ import app.gyrolet.mpvrx.preferences.PlayerPreferences
 import app.gyrolet.mpvrx.preferences.SubtitlesPreferences
 import app.gyrolet.mpvrx.preferences.VideoSortType
 import app.gyrolet.mpvrx.ui.player.controls.PlayerControls
+import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlpManager
 import app.gyrolet.mpvrx.ui.theme.MpvrxTheme
 import app.gyrolet.mpvrx.utils.history.RecentlyPlayedOps
 import app.gyrolet.mpvrx.utils.media.HttpUtils
@@ -527,6 +528,14 @@ class PlayerActivity :
     setHttpHeadersFromExtras(intent.extras)
 
     getPlayableUri(intent)?.let { playableUri ->
+      // Remind user if they forgot to set up yt-dlp
+      if (playableUri.startsWith("http") && !playableUri.substringAfterLast('/').contains('.')) {
+        val ytdlDir = YtdlpManager.getYtdlDir(this)
+        if (!File(ytdlDir, "yt-dlp").exists()) {
+          viewModel.showToast(getString(R.string.toast_need_ytdl))
+        }
+      }
+
       currentPlayableUri = playableUri
       isReady = false
       viewModel.onVideoLoadStarted()
@@ -3116,6 +3125,14 @@ class PlayerActivity :
 
     // Load the new file
     getPlayableUri(intent)?.let { uri ->
+      // Remind user if they forgot to set up yt-dlp
+      if (uri.startsWith("http") && !uri.substringAfterLast('/').contains('.')) {
+        val ytdlDir = YtdlpManager.getYtdlDir(this)
+        if (!File(ytdlDir, "yt-dlp").exists()) {
+          viewModel.showToast(getString(R.string.toast_need_ytdl))
+        }
+      }
+
       currentPlayableUri = uri
       isReady = false
       viewModel.onVideoLoadStarted()

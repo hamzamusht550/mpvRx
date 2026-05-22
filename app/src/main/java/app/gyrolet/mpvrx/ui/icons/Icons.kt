@@ -237,6 +237,7 @@ object Icons {
     val ChevronRight = Shared.ChevronRight
     val Clear = Shared.Clear
     val Close = Shared.Close
+    val CloudDownload = Shared.CloudDownload
     val Code = Shared.Code
     val ContentCopy = Shared.ContentCopy
     val CreateNewFolder = Shared.CreateNewFolder

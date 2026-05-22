@@ -12,6 +12,7 @@ import app.gyrolet.mpvrx.preferences.GesturePreferences
 import app.gyrolet.mpvrx.preferences.PlayerPreferences
 import app.gyrolet.mpvrx.preferences.SettingsManager
 import app.gyrolet.mpvrx.preferences.SubtitlesPreferences
+import app.gyrolet.mpvrx.preferences.YtdlPreferences
 import app.gyrolet.mpvrx.preferences.preference.AndroidPreferenceStore
 import app.gyrolet.mpvrx.preferences.preference.PreferenceStore
 import org.koin.android.ext.koin.androidContext
@@ -33,6 +34,7 @@ val PreferencesModule =
     single { BrowserPreferences(get(), androidContext()) }
     singleOf(::FoldersPreferences)
     singleOf(::AiPreferences)
+    singleOf(::YtdlPreferences)
     singleOf(::SettingsManager)
   }
 

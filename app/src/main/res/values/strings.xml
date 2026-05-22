@@ -809,4 +809,9 @@
   <string name="pref_size_bytes">%1$d B</string>
   <string name="pref_size_kb">%.1f KB</string>
   <string name="pref_size_mb">%.1f MB</string>
+  <string name="toast_need_ytdl">You need to install yt-dlp to play this link (Settings > Advanced > yt-dlp Manager)</string>
+  <string name="pref_ytdl_quality_any">Any</string>
+  <string name="pref_ytdl_prefer_h264_title">Prefer H.264 (AVC)</string>
+  <string name="pref_ytdl_prefer_h264_summary">Increases compatibility on older devices but may limit quality</string>
+  <string name="pref_ytdl_quality_title">Preferred Quality</string>
 </resources>
