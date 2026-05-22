@@ -91,10 +91,6 @@ private fun offSettings(): List<Pair<String, String>> = listOf(
   "hdr-reference-white"         to "203",
   "tone-mapping-visualize"      to "no",
   "glsl-shader-opts"            to "",        // clear any hdr-toys shader options
-  "gamma"                       to "0",
-  "contrast"                    to "0",
-  "saturation"                  to "0",
-  "brightness"                  to "0",
 )
 
 private fun hdrToysSettings(profile: HdrToysProfile): List<Pair<String, String>> = listOf(
@@ -111,10 +107,6 @@ private fun hdrToysSettings(profile: HdrToysProfile): List<Pair<String, String>>
   "hdr-reference-white"         to "203",
   "tone-mapping-visualize"      to "no",
   "glsl-shader-opts"            to profile.shaderOptionsValue,
-  "gamma"                       to "0",
-  "contrast"                    to "0",
-  "saturation"                  to "0",
-  "brightness"                  to "0",
 )
 
 private fun linearHdrSettings(hdrEnabled: Boolean): List<Pair<String, String>> = listOf(
@@ -129,10 +121,6 @@ private fun linearHdrSettings(hdrEnabled: Boolean): List<Pair<String, String>> =
   "hdr-compute-peak"            to if (hdrEnabled) "yes" else "auto",
   "hdr-reference-white"         to "203",
   "glsl-shader-opts"            to "",
-  "gamma"                       to "0",
-  "contrast"                    to "0",
-  "saturation"                  to "0",
-  "brightness"                  to "0",
 )
 
 // ─────────────────────────────────────────────────────────────────────────────

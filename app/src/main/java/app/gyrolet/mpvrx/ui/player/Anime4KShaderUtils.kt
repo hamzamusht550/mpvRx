@@ -87,8 +87,15 @@ internal fun selectRuntimeStableAnime4K(
   )
 }
 
+private data class VideoGeometrySnapshot(
+  val doubles: Map<String, Double>,
+  val strings: Map<String, String>,
+)
+
 internal fun clearAnime4KShaders() {
-  setShaderList(currentShaderList().filterNot(::isBuiltInAnime4KShaderPath))
+  withPreservedVideoGeometry {
+    setShaderList(currentShaderList().filterNot(::isBuiltInAnime4KShaderPath))
+  }
 }
 
 internal fun applyAnime4KShaderChain(
@@ -105,8 +112,10 @@ internal fun applyAnime4KShaderChain(
     return false
   }
 
-  val retainedShaders = currentShaderList().filterNot(::isBuiltInAnime4KShaderPath)
-  setShaderList(shaderPaths + retainedShaders)
+  withPreservedVideoGeometry {
+    val retainedShaders = currentShaderList().filterNot(::isBuiltInAnime4KShaderPath)
+    setShaderList(shaderPaths + retainedShaders)
+  }
   return true
 }
 
@@ -118,6 +127,51 @@ internal fun applyAnime4KStabilityOptions(useVulkan: Boolean) {
   }
   MPVLib.setOptionString("vd-lavc-dr", "yes")
 }
+
+private inline fun withPreservedVideoGeometry(block: () -> Unit) {
+  val snapshot = captureVideoGeometry()
+  block()
+  restoreVideoGeometry(snapshot)
+}
+
+private fun captureVideoGeometry(): VideoGeometrySnapshot =
+  VideoGeometrySnapshot(
+    doubles = VIDEO_GEOMETRY_DOUBLE_PROPS.mapNotNull { prop ->
+      MPVLib.getPropertyDouble(prop)?.let { prop to it }
+    }.toMap(),
+    strings = VIDEO_GEOMETRY_STRING_PROPS.mapNotNull { prop ->
+      MPVLib.getPropertyString(prop)?.takeIf { it.isNotBlank() }?.let { prop to it }
+    }.toMap(),
+  )
+
+private fun restoreVideoGeometry(snapshot: VideoGeometrySnapshot) {
+  snapshot.doubles.forEach { (prop, value) ->
+    runCatching { MPVLib.setPropertyDouble(prop, value) }
+  }
+  snapshot.strings.forEach { (prop, value) ->
+    runCatching { MPVLib.setPropertyString(prop, value) }
+  }
+}
+
+private val VIDEO_GEOMETRY_DOUBLE_PROPS = listOf(
+  "video-zoom",
+  "video-pan-x",
+  "video-pan-y",
+  "video-align-x",
+  "video-align-y",
+  "video-aspect-override",
+  "panscan",
+  "brightness",
+  "contrast",
+  "saturation",
+  "gamma",
+  "hue",
+  "sharpen",
+)
+
+private val VIDEO_GEOMETRY_STRING_PROPS = listOf(
+  "video-unscaled",
+)
 
 private fun currentShaderList(): List<String> =
   MPVLib.getPropertyString("glsl-shaders")

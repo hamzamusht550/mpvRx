@@ -2492,6 +2492,7 @@ class PlayerActivity :
     }
 
     applySubtitlePreferences()
+    applyVideoFilterPreferences()
     viewModel.restoreSavedVideoAspect(showUpdate = false)
 
     if (shouldForceCurrentMediaTitle()) {
@@ -2712,6 +2713,16 @@ class PlayerActivity :
     )
 
     Log.d(TAG, "Applied subtitle preferences")
+  }
+
+  /**
+   * Applies saved video filter preferences (brightness, contrast, etc.) when a file is loaded.
+   */
+  private fun applyVideoFilterPreferences() {
+    VideoFilters.entries.forEach {
+      MPVLib.setPropertyInt(it.mpvProperty, it.preference(decoderPreferences).get())
+    }
+    Log.d(TAG, "Applied video filter preferences")
   }
 
   /**
