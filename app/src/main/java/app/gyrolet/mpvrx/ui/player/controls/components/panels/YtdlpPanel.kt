@@ -28,7 +28,10 @@ import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import app.gyrolet.mpvrx.ui.icons.Icon
 import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.player.controls.panelCardsColors
+import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlCodecPreference
 import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlpManager
+import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlpOptionSettings
+import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlpOptionsBuilder
 import app.gyrolet.mpvrx.ui.theme.spacing
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -50,6 +53,7 @@ fun YtdlpPanel(
   val ytdlPreferences = koinInject<YtdlPreferences>()
   val ytdlQuality by ytdlPreferences.ytdlQuality.collectAsState()
   val preferH264 by ytdlPreferences.preferH264.collectAsState()
+  val codecPreference by ytdlPreferences.codecPreference.collectAsState()
   val writeSubs by ytdlPreferences.writeSubs.collectAsState()
   val writeAutoSubs by ytdlPreferences.writeAutoSubs.collectAsState()
 
@@ -202,7 +206,7 @@ fun YtdlpPanel(
                     selected = ytdlQuality == level,
                     onClick = {
                       ytdlPreferences.ytdlQuality.set(level)
-                      updateFormatString(ytdlPreferences, level, preferH264)
+                      updateFormatString(ytdlPreferences)
                     },
                     label = { Text(label, style = MaterialTheme.typography.labelSmall) },
                     leadingIcon = if (ytdlQuality == level) {
@@ -223,6 +227,55 @@ fun YtdlpPanel(
                   style = MaterialTheme.typography.labelSmall,
                   fontWeight = FontWeight.ExtraBold,
                   color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+              }
+            }
+          }
+        }
+
+        Surface(
+          shape = MaterialTheme.shapes.large,
+          color = cardsColors.containerColor,
+          tonalElevation = 0.dp,
+          border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+          ),
+        ) {
+          Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
+          ) {
+            Text(
+              text = "Codec Preset",
+              style = MaterialTheme.typography.bodyMedium,
+              fontWeight = FontWeight.Bold,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.padding(start = MaterialTheme.spacing.extraSmall),
+            )
+            FlowRow(
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
+              verticalArrangement = Arrangement.spacedBy(6.dp),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              listOf(
+                YtdlCodecPreference.AUTO,
+                YtdlCodecPreference.H264,
+                YtdlCodecPreference.VP9,
+                YtdlCodecPreference.VP9_PROFILE2,
+                YtdlCodecPreference.AV1,
+              ).forEach { codec ->
+                FilterChip(
+                  selected = codecPreference == codec || (codec == YtdlCodecPreference.H264 && preferH264),
+                  onClick = {
+                    ytdlPreferences.codecPreference.set(codec)
+                    ytdlPreferences.preferH264.set(codec == YtdlCodecPreference.H264)
+                    updateFormatString(ytdlPreferences)
+                  },
+                  label = { Text(codec.title, style = MaterialTheme.typography.labelSmall) },
+                  leadingIcon = if (codecPreference == codec) {
+                    { Icon(Icons.Default.Check, null, modifier = Modifier.size(14.dp)) }
+                  } else null,
                 )
               }
             }
@@ -422,17 +475,17 @@ fun YtdlpPanel(
   }
 }
 
-private fun updateFormatString(prefs: YtdlPreferences, quality: Int, preferH264: Boolean) {
-  var qstr = ""
-  if (quality != -1 && preferH264) {
-    qstr = "(bv*[vcodec^=?avc]/bv*[vcodec^=?mp4])[height<=?${quality}]+ba/" +
-        "(b[vcodec^=?avc]/b[vcodec^=?mp4])[height<=?${quality}]"
-  } else if (quality != -1) {
-    qstr = "bv[height<=?${quality}]+ba/b[height<=?${quality}]"
-  } else if (preferH264) {
-    qstr = "(bv*[vcodec^=?avc]/bv*[vcodec^=?mp4])+ba/(b[vcodec^=?avc]/b[vcodec^=?mp4])"
-  }
-  if (qstr.isNotEmpty())
-    qstr += "/bv*+ba/b"
-  prefs.ytdlFormat.set(qstr)
+private fun updateFormatString(prefs: YtdlPreferences) {
+  prefs.ytdlFormat.set(
+    YtdlpOptionsBuilder.buildFormat(
+      YtdlpOptionSettings(
+        codecPreference = prefs.codecPreference.get(),
+        legacyPreferH264 = prefs.preferH264.get(),
+        maxHeight = prefs.ytdlQuality.get(),
+        maxFps = prefs.maxFps.get(),
+        hdrPreference = prefs.hdrPreference.get(),
+        containerPreference = prefs.containerPreference.get(),
+      ),
+    ),
+  )
 }

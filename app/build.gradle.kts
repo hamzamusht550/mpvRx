@@ -241,6 +241,9 @@ dependencies {
   implementation(libs.nanohttpd)
   implementation(libs.lazycolumnscrollbar)
   implementation(libs.reorderable)
+
+  testImplementation(libs.junit)
+  testImplementation(libs.kotlin.test)
 }
 
 /* ---------------- Git helpers ---------------- */

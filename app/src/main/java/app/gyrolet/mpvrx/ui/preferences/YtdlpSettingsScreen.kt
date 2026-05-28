@@ -27,7 +27,13 @@ import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import app.gyrolet.mpvrx.presentation.Screen
 import app.gyrolet.mpvrx.ui.icons.Icon
 import app.gyrolet.mpvrx.ui.icons.Icons
+import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlCodecPreference
+import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlContainerPreference
+import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlHdrPreference
+import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlPlaylistMode
 import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlpManager
+import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlpOptionSettings
+import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlpOptionsBuilder
 import app.gyrolet.mpvrx.ui.theme.spacing
 import app.gyrolet.mpvrx.ui.utils.LocalBackStack
 import app.gyrolet.mpvrx.ui.utils.popSafely
@@ -54,10 +60,26 @@ object YtdlpSettingsScreen : Screen {
         val ytdlPreferences = koinInject<YtdlPreferences>()
         val ytdlQuality by ytdlPreferences.ytdlQuality.collectAsState()
         val preferH264 by ytdlPreferences.preferH264.collectAsState()
+        val codecPreference by ytdlPreferences.codecPreference.collectAsState()
+        val maxFps by ytdlPreferences.maxFps.collectAsState()
+        val hdrPreference by ytdlPreferences.hdrPreference.collectAsState()
+        val containerPreference by ytdlPreferences.containerPreference.collectAsState()
+        val playlistMode by ytdlPreferences.playlistMode.collectAsState()
+        val geoBypass by ytdlPreferences.geoBypass.collectAsState()
+        val liveFromStart by ytdlPreferences.liveFromStart.collectAsState()
         val writeSubs by ytdlPreferences.writeSubs.collectAsState()
         val writeAutoSubs by ytdlPreferences.writeAutoSubs.collectAsState()
         
         var userAgentText by remember { mutableStateOf(ytdlPreferences.customUserAgent.get()) }
+        var subtitleLanguagesText by remember { mutableStateOf(ytdlPreferences.subtitleLanguages.get()) }
+        var formatSortText by remember { mutableStateOf(ytdlPreferences.formatSort.get()) }
+        var mergeOutputFormatText by remember { mutableStateOf(ytdlPreferences.mergeOutputFormat.get()) }
+        var refererText by remember { mutableStateOf(ytdlPreferences.referer.get()) }
+        var cookiesFileText by remember { mutableStateOf(ytdlPreferences.cookiesFile.get()) }
+        var proxyText by remember { mutableStateOf(ytdlPreferences.proxy.get()) }
+        var extractorArgsText by remember { mutableStateOf(ytdlPreferences.extractorArgs.get()) }
+        var sponsorBlockMarkText by remember { mutableStateOf(ytdlPreferences.sponsorBlockMark.get()) }
+        var sponsorBlockRemoveText by remember { mutableStateOf(ytdlPreferences.sponsorBlockRemove.get()) }
         var rawOptionsText by remember { mutableStateOf(ytdlPreferences.customRawOptions.get()) }
 
         val ytdlDir = remember { YtdlpManager.getYtdlDir(context) }
@@ -202,7 +224,7 @@ object YtdlpSettingsScreen : Screen {
                                     selected = ytdlQuality == level,
                                     onClick = {
                                         ytdlPreferences.ytdlQuality.set(level)
-                                        updateFormatString(ytdlPreferences, level, preferH264)
+                                        updateFormatString(ytdlPreferences)
                                     },
                                     label = { Text(qualityLabels[index]) },
                                     leadingIcon = if (ytdlQuality == level) {
@@ -215,20 +237,92 @@ object YtdlpSettingsScreen : Screen {
 
                         PreferenceDivider()
 
-                        SwitchPreference(
-                            value = preferH264,
-                            onValueChange = { newValue ->
-                                ytdlPreferences.preferH264.set(newValue)
-                                updateFormatString(ytdlPreferences, ytdlQuality, newValue)
+                        OptionDropdown(
+                            title = "Video Codec",
+                            value = codecPreference,
+                            values = YtdlCodecPreference.entries,
+                            valueLabel = { it.title },
+                            onValueChange = { selected ->
+                                ytdlPreferences.codecPreference.set(selected)
+                                ytdlPreferences.preferH264.set(selected == YtdlCodecPreference.H264)
+                                updateFormatString(ytdlPreferences)
                             },
-                            title = { Text("Prefer H.264 (AVC) Codec", fontWeight = FontWeight.Medium) },
-                            summary = { Text("Limits quality to 1080p but maximizes hardware decoding compatibility.") }
+                        )
+
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            listOf(0 to "Any FPS", 30 to "30 FPS", 60 to "60 FPS", 120 to "120 FPS").forEach { (fps, label) ->
+                                FilterChip(
+                                    selected = maxFps == fps,
+                                    onClick = {
+                                        ytdlPreferences.maxFps.set(fps)
+                                        updateFormatString(ytdlPreferences)
+                                    },
+                                    label = { Text(label) },
+                                    leadingIcon = if (maxFps == fps) {
+                                        { Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp)) }
+                                    } else null,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                            }
+                        }
+
+                        OptionDropdown(
+                            title = "HDR Preference",
+                            value = hdrPreference,
+                            values = YtdlHdrPreference.entries,
+                            valueLabel = { it.title },
+                            onValueChange = {
+                                ytdlPreferences.hdrPreference.set(it)
+                                updateFormatString(ytdlPreferences)
+                            },
+                        )
+
+                        OptionDropdown(
+                            title = "Container",
+                            value = containerPreference,
+                            values = YtdlContainerPreference.entries,
+                            valueLabel = { it.title },
+                            onValueChange = {
+                                ytdlPreferences.containerPreference.set(it)
+                                updateFormatString(ytdlPreferences)
+                            },
+                        )
+
+                        OutlinedTextField(
+                            value = formatSortText,
+                            onValueChange = {
+                                formatSortText = it
+                                ytdlPreferences.formatSort.set(it)
+                            },
+                            label = { Text("Format Sort") },
+                            placeholder = { Text("res,fps,hdr:12,vcodec:vp9.2") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            supportingText = { Text("Passed to yt-dlp as format-sort for advanced ranking.") }
+                        )
+
+                        OutlinedTextField(
+                            value = mergeOutputFormatText,
+                            onValueChange = {
+                                mergeOutputFormatText = it
+                                ytdlPreferences.mergeOutputFormat.set(it)
+                            },
+                            label = { Text("Merge Output Format") },
+                            placeholder = { Text("mp4, mkv, webm") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
                         )
 
                         PreferenceDivider()
 
-                        val currentFormat = remember(ytdlQuality, preferH264) {
-                            computeFormatString(ytdlQuality, preferH264)
+                        val currentFormat = remember(ytdlQuality, preferH264, codecPreference, maxFps, hdrPreference, containerPreference) {
+                            YtdlpOptionsBuilder.buildFormat(YtdlpOptionSettings.fromYtdlPreferences(ytdlPreferences))
                         }
                         
                         Surface(
@@ -283,6 +377,22 @@ object YtdlpSettingsScreen : Screen {
                             title = { Text("Include Auto-Generated Subtitles", fontWeight = FontWeight.Medium) },
                             summary = { Text("Fetch auto-caption tracks (e.g. YouTube Speech-to-Text) when regular subs are absent.") }
                         )
+
+                        PreferenceDivider()
+
+                        OutlinedTextField(
+                            value = subtitleLanguagesText,
+                            onValueChange = {
+                                subtitleLanguagesText = it
+                                ytdlPreferences.subtitleLanguages.set(it)
+                            },
+                            label = { Text("Subtitle Languages") },
+                            placeholder = { Text("all or en.*,ja") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            supportingText = { Text("Overrides app subtitle languages only for yt-dlp downloads.") }
+                        )
                     }
                 }
 
@@ -317,15 +427,118 @@ object YtdlpSettingsScreen : Screen {
                         PreferenceDivider()
 
                         OutlinedTextField(
+                            value = refererText,
+                            onValueChange = {
+                                refererText = it
+                                ytdlPreferences.referer.set(it)
+                            },
+                            label = { Text("Referer") },
+                            placeholder = { Text("https://www.youtube.com/") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+
+                        OutlinedTextField(
+                            value = cookiesFileText,
+                            onValueChange = {
+                                cookiesFileText = it
+                                ytdlPreferences.cookiesFile.set(it)
+                            },
+                            label = { Text("Cookies File") },
+                            placeholder = { Text("/storage/emulated/0/Download/cookies.txt") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+
+                        OutlinedTextField(
+                            value = proxyText,
+                            onValueChange = {
+                                proxyText = it
+                                ytdlPreferences.proxy.set(it)
+                            },
+                            label = { Text("Proxy") },
+                            placeholder = { Text("socks5://127.0.0.1:1080") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+
+                        OutlinedTextField(
+                            value = extractorArgsText,
+                            onValueChange = {
+                                extractorArgsText = it
+                                ytdlPreferences.extractorArgs.set(it)
+                            },
+                            label = { Text("Extractor Args") },
+                            placeholder = { Text("youtube:player_client=android,web") },
+                            singleLine = false,
+                            maxLines = 2,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+
+                        OptionDropdown(
+                            title = "Playlist Behavior",
+                            value = playlistMode,
+                            values = YtdlPlaylistMode.entries,
+                            valueLabel = { it.title },
+                            onValueChange = { ytdlPreferences.playlistMode.set(it) },
+                        )
+
+                        SwitchPreference(
+                            value = geoBypass,
+                            onValueChange = { ytdlPreferences.geoBypass.set(it) },
+                            title = { Text("Geo Bypass", fontWeight = FontWeight.Medium) },
+                            summary = { Text("Ask yt-dlp to use its extractor-level region bypass logic.") }
+                        )
+
+                        SwitchPreference(
+                            value = liveFromStart,
+                            onValueChange = { ytdlPreferences.liveFromStart.set(it) },
+                            title = { Text("Live From Start", fontWeight = FontWeight.Medium) },
+                            summary = { Text("Start live streams from the beginning when the extractor supports it.") }
+                        )
+
+                        OutlinedTextField(
+                            value = sponsorBlockMarkText,
+                            onValueChange = {
+                                sponsorBlockMarkText = it
+                                ytdlPreferences.sponsorBlockMark.set(it)
+                            },
+                            label = { Text("SponsorBlock Mark") },
+                            placeholder = { Text("sponsor,selfpromo") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+
+                        OutlinedTextField(
+                            value = sponsorBlockRemoveText,
+                            onValueChange = {
+                                sponsorBlockRemoveText = it
+                                ytdlPreferences.sponsorBlockRemove.set(it)
+                            },
+                            label = { Text("SponsorBlock Remove") },
+                            placeholder = { Text("sponsor") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+
+                        PreferenceDivider()
+
+                        OutlinedTextField(
                             value = rawOptionsText,
                             onValueChange = { 
                                 rawOptionsText = it
                                 ytdlPreferences.customRawOptions.set(it)
                             },
-                            label = { Text("Raw CLI Option Flags (Comma-separated)") },
-                            placeholder = { Text("geo-bypass=, referer=https://youtube.com/") },
+                            label = { Text("Raw yt-dlp Options") },
+                            placeholder = { Text("extractor-args=\"youtube:player_client=android,web\"\ngeo-bypass=") },
                             singleLine = false,
-                            maxLines = 3,
+                            maxLines = 6,
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
@@ -333,7 +546,7 @@ object YtdlpSettingsScreen : Screen {
                                 unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
                             ),
                             supportingText = {
-                                Text("Pass arbitrary key=value parameters to yt-dlp. Make sure option names end with '=' (e.g. referer=val, geo-bypass=).")
+                                Text("Anything not exposed above. Separate options with new lines or commas; quote values that contain commas.")
                             }
                         )
                     }
@@ -538,22 +751,60 @@ object YtdlpSettingsScreen : Screen {
     }
     }
 
-    private fun updateFormatString(prefs: YtdlPreferences, quality: Int, preferH264: Boolean) {
-        prefs.ytdlFormat.set(computeFormatString(quality, preferH264))
+    private fun updateFormatString(prefs: YtdlPreferences) {
+        prefs.ytdlFormat.set(YtdlpOptionsBuilder.buildFormat(YtdlpOptionSettings.fromYtdlPreferences(prefs)))
     }
+}
 
-    private fun computeFormatString(quality: Int, preferH264: Boolean): String {
-        var qstr = ""
-        if (quality != -1 && preferH264) {
-            qstr = "(bv*[vcodec^=?avc]/bv*[vcodec^=?mp4])[height<=?${quality}]+ba/" +
-                    "(b[vcodec^=?avc]/b[vcodec^=?mp4])[height<=?${quality}]"
-        } else if (quality != -1) {
-            qstr = "bv[height<=?${quality}]+ba/b[height<=?${quality}]"
-        } else if (preferH264) {
-            qstr = "(bv*[vcodec^=?avc]/bv*[vcodec^=?mp4])+ba/(b[vcodec^=?avc]/b[vcodec^=?mp4])"
+private fun YtdlpOptionSettings.Companion.fromYtdlPreferences(prefs: YtdlPreferences): YtdlpOptionSettings =
+    YtdlpOptionSettings(
+        codecPreference = prefs.codecPreference.get(),
+        legacyPreferH264 = prefs.preferH264.get(),
+        maxHeight = prefs.ytdlQuality.get(),
+        maxFps = prefs.maxFps.get(),
+        hdrPreference = prefs.hdrPreference.get(),
+        containerPreference = prefs.containerPreference.get(),
+    )
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun <T> OptionDropdown(
+    title: String,
+    value: T,
+    values: List<T>,
+    valueLabel: (T) -> String,
+    onValueChange: (T) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        OutlinedTextField(
+            value = valueLabel(value),
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(title) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                .fillMaxWidth(),
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            values.forEach { item ->
+                DropdownMenuItem(
+                    text = { Text(valueLabel(item)) },
+                    onClick = {
+                        expanded = false
+                        onValueChange(item)
+                    },
+                )
+            }
         }
-        if (qstr.isNotEmpty())
-            qstr += "/bv*+ba/b"
-        return qstr
     }
 }
