@@ -23,6 +23,9 @@ import org.koin.android.ext.android.inject
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import org.koin.core.annotation.KoinExperimentalAPI
+import app.gyrolet.mpvrx.preferences.PlayerPreferences
+import android.content.ComponentName
+import android.content.pm.PackageManager
 
 @OptIn(KoinExperimentalAPI::class)
 class App : Application() {
@@ -50,6 +53,26 @@ class App : Application() {
     }
 
     Thread.setDefaultUncaughtExceptionHandler(GlobalExceptionHandler(applicationContext, CrashActivity::class.java))
+
+    applicationScope.launch {
+      runCatching {
+        val preferences: PlayerPreferences by inject()
+        val enableMediaInfo = preferences.enableMediaInfoIntent.get()
+        val componentName = ComponentName(this@App, "app.gyrolet.mpvrx.ui.mediainfo.MediaInfoActivityAlias")
+        val newState = if (enableMediaInfo) {
+          PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+        } else {
+          PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+        }
+        packageManager.setComponentEnabledSetting(
+          componentName,
+          newState,
+          PackageManager.DONT_KILL_APP
+        )
+      }.onFailure { error ->
+        Log.e("App", "Failed to initialize MediaInfoActivityAlias setting on launch", error)
+      }
+    }
 
     // Perform cache maintenance on app startup (non-blocking)
     applicationScope.launch {

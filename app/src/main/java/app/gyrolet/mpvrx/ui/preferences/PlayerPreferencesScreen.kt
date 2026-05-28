@@ -44,6 +44,13 @@ import me.zhanghai.compose.preference.SwitchPreference
 import org.koin.compose.koinInject
 import kotlin.math.roundToInt
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalContext
+import android.content.ComponentName
+import android.content.pm.PackageManager
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.unit.dp
 
 @Serializable
 object PlayerPreferencesScreen : Screen {
@@ -200,6 +207,40 @@ object PlayerPreferencesScreen : Screen {
                   Text(
                     if (autoplayAfterScreenUnlock) stringResource(R.string.pref_player_autoplay_after_screen_unlock_summary)
                     else stringResource(R.string.pref_player_autoplay_after_screen_unlock_summary_disabled),
+                    color = MaterialTheme.colorScheme.outline,
+                  )
+                },
+              )
+
+              PreferenceDivider()
+
+              val enableMediaInfoIntent by preferences.enableMediaInfoIntent.collectAsState()
+              val context = LocalContext.current
+              SwitchPreference(
+                value = enableMediaInfoIntent,
+                onValueChange = { enabled ->
+                  preferences.enableMediaInfoIntent.set(enabled)
+                  val componentName = ComponentName(context, "app.gyrolet.mpvrx.ui.mediainfo.MediaInfoActivityAlias")
+                  val newState = if (enabled) {
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                  } else {
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                  }
+                  try {
+                    context.packageManager.setComponentEnabledSetting(
+                      componentName,
+                      newState,
+                      PackageManager.DONT_KILL_APP
+                    )
+                  } catch (e: Exception) {
+                    android.util.Log.e("PlayerPreferencesScreen", "Failed to set alias state", e)
+                  }
+                },
+                title = { Text("Show Media Info in chooser") },
+                summary = {
+                  Text(
+                    "Show Media Info in system \"Open with\" / " +
+                    "sharing menus to analyze files from other apps.",
                     color = MaterialTheme.colorScheme.outline,
                   )
                 },
@@ -620,12 +661,24 @@ object PlayerPreferencesScreen : Screen {
         onDismissRequest = { showTemplateDialog = false },
         title = { Text("Filename template") },
         text = {
-          OutlinedTextField(
-            value = templateDraft,
-            onValueChange = { templateDraft = it },
-            label = { Text("Template") },
-            supportingText = { Text("%f file name, %Y%m%d date, %H%M%S time, %p seconds, %wH.%wM.%wS.%wT wall-clock") },
-          )
+          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+              value = templateDraft,
+              onValueChange = { templateDraft = it },
+              label = { Text("Template") },
+              modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+              text = "Use placeholders to customize the screenshot filename:\n" +
+                  "• %f — Video title or filename\n" +
+                  "• %p — Playback position (seconds)\n" +
+                  "• %Y, %m, %d — Year, Month, Day\n" +
+                  "• %H, %M, %S — Hour, Minute, Second\n" +
+                  "• %wH, %wM, %wS, %wT — Wall-clock time (hour, min, sec, ms)",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
         },
         confirmButton = {
           TextButton(
