@@ -271,6 +271,18 @@ object M3UParser {
       return M3UParseResult.Error("Failed to parse playlist content: ${e.message}", e)
     }
   }
+
+  fun isLikelyHlsMediaManifest(content: String): Boolean {
+    val lines = content.lines().map { it.trim() }
+    return lines.any { line ->
+      line.startsWith("#EXT-X-STREAM-INF") ||
+        line.startsWith("#EXT-X-TARGETDURATION") ||
+        line.startsWith("#EXT-X-MEDIA-SEQUENCE") ||
+        line.startsWith("#EXT-X-MAP") ||
+        line.startsWith("#EXT-X-BYTERANGE") ||
+        line.startsWith("#EXT-X-ENDLIST")
+    }
+  }
   
   /**
    * Extract attribute value from EXTINF line
@@ -285,6 +297,12 @@ object M3UParser {
    * Extract base URL from a full URL
    */
   private fun extractBaseUrl(url: String): String {
+    val scheme = Uri.parse(url).scheme
+    if (scheme != null && scheme !in setOf("http", "https")) {
+      return url.substringBeforeLast('/', missingDelimiterValue = url).let { base ->
+        if (base == url) "$url/" else "$base/"
+      }
+    }
     return try {
       val urlObj = URL(url)
       val path = urlObj.path
@@ -300,15 +318,22 @@ object M3UParser {
    * Resolve a relative URL against a base URL
    */
   private fun resolveRelativeUrl(baseUrl: String, relativeUrl: String): String {
+    val parsedScheme = Uri.parse(relativeUrl).scheme
+    if (parsedScheme != null || relativeUrl.startsWith("//")) {
+      return relativeUrl
+    }
     return try {
       URL(URL(baseUrl), relativeUrl).toString()
     } catch (_: Exception) {
-      // Fallback to simple concatenation
-      if (relativeUrl.startsWith("/")) {
-        val base = URL(baseUrl)
-        "${base.protocol}://${base.host}${if (base.port != -1) ":${base.port}" else ""}$relativeUrl"
-      } else {
-        baseUrl + relativeUrl
+      val baseUri = Uri.parse(baseUrl)
+      when {
+        relativeUrl.startsWith("/") && baseUri.scheme != null && !baseUri.authority.isNullOrBlank() -> {
+          "${baseUri.scheme}://${baseUri.encodedAuthority ?: baseUri.authority}$relativeUrl"
+        }
+        else -> {
+          val base = if (baseUrl.endsWith("/")) baseUrl else baseUrl.substringBeforeLast('/') + "/"
+          base + relativeUrl
+        }
       }
     }
   }

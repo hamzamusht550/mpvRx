@@ -250,6 +250,45 @@ class PlaylistRepository(private val playlistDao: PlaylistDao) {
     }
   }
 
+  suspend fun createM3UPlaylistFromContent(
+    content: String,
+    sourceName: String,
+    sourceUrl: String? = null,
+    userAgent: String? = null,
+  ): Result<Long> {
+    return try {
+      val parseResult = M3UParser.parseContent(content, sourceUrl ?: sourceName)
+
+      when (parseResult) {
+        is M3UParseResult.Success -> {
+          val now = System.currentTimeMillis()
+          val playlistId = playlistDao.insertPlaylist(
+            PlaylistEntity(
+              name = parseResult.playlistName.ifBlank { sourceName.substringBeforeLast('.') },
+              createdAt = now,
+              updatedAt = now,
+              m3uSourceUrl = null,
+              isM3uPlaylist = true,
+              userAgent = userAgent,
+            )
+          )
+
+          val items = parseResult.items.mapIndexed { index, m3uItem ->
+            m3uItem.toEntity(playlistId.toInt(), index, now)
+          }
+
+          insertInChunks(items)
+          Result.success(playlistId)
+        }
+        is M3UParseResult.Error -> {
+          Result.failure(Exception(parseResult.message, parseResult.exception))
+        }
+      }
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+  }
+
   suspend fun refreshM3UPlaylist(playlistId: Int): Result<Unit> {
     return try {
       val playlist = getPlaylistById(playlistId)
