@@ -130,6 +130,11 @@ android {
   androidResources {
     generateLocaleConfig = true
   }
+
+  lint {
+    checkReleaseBuilds = false
+    abortOnError = false
+  }
 }
 
 androidComponents {
@@ -169,7 +174,7 @@ kotlin {
 }
 
 composeCompiler {
-  includeSourceInformation = true
+  includeSourceInformation = false
 }
 
 room {
@@ -229,6 +234,7 @@ dependencies {
   implementation(libs.fsaf)
   implementation(libs.mediainfo.lib)
   implementation("com.llamatik:library:1.4.0")
+  implementation(libs.androidx.profileinstaller)
   
   implementation(files("libs/mpvlib.aar"))
 

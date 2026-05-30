@@ -134,14 +134,132 @@ class Anime4KManager(private val context: Context) {
     }
 
     try {
-      context.assets.open("$SHADER_DIR/$fileName").use { input ->
-        FileOutputStream(destFile).use { output ->
-          input.copyTo(output)
-        }
+      // Read the original shader source code from assets
+      val originalContent = context.assets.open("$SHADER_DIR/$fileName").use { input ->
+        input.bufferedReader().use { it.readText() }
       }
+
+      // Dynamically compile and optimize the shader GLSL code
+      val optimizedContent = optimizeShaderContent(fileName, originalContent)
+
+      // Write the optimized shader code to the destination file
+      destFile.writeText(optimizedContent)
+      android.util.Log.i("Anime4KManager", "Optimized and copied shader: $fileName")
       return true
     } catch (e: Exception) {
+      android.util.Log.e("Anime4KManager", "Failed to copy and optimize shader: $fileName", e)
       return false
+    }
+  }
+
+  /**
+   * Dynamically optimizes GLSL shader code for mobile GPUs:
+   * 1. Injects 'precision mediump float;' to force ultra-fast FP16 mode.
+   * 2. Eliminates redundant texture fetches in C.R.E.L.U. shader passes.
+   */
+  private fun optimizeShaderContent(fileName: String, content: String): String {
+    if (!fileName.endsWith(".glsl")) return content
+
+    val lines = content.lines()
+    val newLines = mutableListOf<String>()
+    var inHeader = false
+    var precisionInjectedForBlock = false
+
+    for (line in lines) {
+      val trimmed = line.trim()
+      if (trimmed.startsWith("//!")) {
+        if (!inHeader) {
+          inHeader = true
+          precisionInjectedForBlock = false
+        }
+        newLines.add(line)
+      } else {
+        if (inHeader) {
+          inHeader = false
+          if (!precisionInjectedForBlock && trimmed.isNotEmpty() && !trimmed.startsWith("//")) {
+            // Force mobile GPU to compile all operations using efficient FP16 precision
+            newLines.add("precision mediump float;")
+            precisionInjectedForBlock = true
+          }
+        }
+        newLines.add(line)
+      }
+    }
+    val withPrecision = newLines.joinToString("\n")
+
+    // Optimize redundant texture fetches inside C.R.E.L.U. convolution passes
+    return optimizeCreluPasses(withPrecision)
+  }
+
+  private fun optimizeCreluPasses(content: String): String {
+    val passes = content.split("(?=(?://!DESC|//!HOOK))".toRegex())
+    val optimizedPasses = passes.map { pass ->
+      optimizeSinglePass(pass)
+    }
+    return optimizedPasses.joinToString("")
+  }
+
+  private fun optimizeSinglePass(pass: String): String {
+    val go0Regex = """#define\s+go_0\([^\)]+\)\s+\(max\(\(?\s*([A-Za-z0-9_]+)_texOff\(vec2\([^\)]+\)\)\)?\s*,\s*0\.0\)\)""".toRegex()
+    val go1Regex = """#define\s+go_1\([^\)]+\)\s+\(max\(\-\(?\s*([A-Za-z0-9_]+)_texOff\(vec2\([^\)]+\)\)\)?\s*,\s*0\.0\)\)""".toRegex()
+
+    val match0 = go0Regex.find(pass)
+    val match1 = go1Regex.find(pass)
+
+    if (match0 == null || match1 == null) {
+      return pass
+    }
+
+    val texName = match0.groupValues[1]
+    val texName1 = match1.groupValues[1]
+
+    if (texName != texName1) {
+      return pass
+    }
+
+    var optimized = pass
+    optimized = optimized.replace(match0.value, "// optimized go_0 macro")
+    optimized = optimized.replace(match1.value, "// optimized go_1 macro")
+
+    val hookStartRegex = """vec4\s+hook\(\s*\)\s*\{""".toRegex()
+    val hookDeclaration = """
+      vec4 hook() {
+          vec4 t_m1_m1 = ${texName}_texOff(vec2(-1.0, -1.0));
+          vec4 t_m1_0  = ${texName}_texOff(vec2(-1.0, 0.0));
+          vec4 t_m1_1  = ${texName}_texOff(vec2(-1.0, 1.0));
+          vec4 t_0_m1  = ${texName}_texOff(vec2(0.0, -1.0));
+          vec4 t_0_0   = ${texName}_texOff(vec2(0.0, 0.0));
+          vec4 t_0_1   = ${texName}_texOff(vec2(0.0, 1.0));
+          vec4 t_1_m1  = ${texName}_texOff(vec2(1.0, -1.0));
+          vec4 t_1_0   = ${texName}_texOff(vec2(1.0, 0.0));
+          vec4 t_1_1   = ${texName}_texOff(vec2(1.0, 1.0));
+    """.trimIndent()
+
+    optimized = optimized.replaceFirst(hookStartRegex, hookDeclaration)
+
+    val go0CallRegex = """go_0\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)""".toRegex()
+    optimized = go0CallRegex.replace(optimized) { result ->
+      val x = mapCoord(result.groupValues[1])
+      val y = mapCoord(result.groupValues[2])
+      "max(t_${x}_${y}, 0.0)"
+    }
+
+    val go1CallRegex = """go_1\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)""".toRegex()
+    optimized = go1CallRegex.replace(optimized) { result ->
+      val x = mapCoord(result.groupValues[1])
+      val y = mapCoord(result.groupValues[2])
+      "max(-t_${x}_${y}, 0.0)"
+    }
+
+    return optimized
+  }
+
+  private fun mapCoord(c: String): String {
+    return when (c.trim()) {
+      "-1.0", "-1" -> "m1"
+      "0.0", "0" -> "0"
+      "1.0", "1" -> "1"
+      else -> "unknown"
     }
   }
 

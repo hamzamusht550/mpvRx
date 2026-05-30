@@ -1,15 +1,18 @@
 package app.gyrolet.mpvrx.domain.browser
 
+import androidx.compose.runtime.Immutable
 import app.gyrolet.mpvrx.domain.media.model.Video
 
 /**
  * Represents an item in the filesystem browser (either a folder or a video file)
  */
+@Immutable
 sealed class FileSystemItem {
   abstract val name: String
   abstract val path: String
   abstract val lastModified: Long
 
+  @Immutable
   data class Folder(
     override val name: String,
     override val path: String,
@@ -21,6 +24,7 @@ sealed class FileSystemItem {
     val newCount: Int = 0,
   ) : FileSystemItem()
 
+  @Immutable
   data class VideoFile(
     override val name: String,
     override val path: String,
@@ -32,6 +36,7 @@ sealed class FileSystemItem {
 /**
  * Represents a path component in the breadcrumb navigation
  */
+@Immutable
 data class PathComponent(
   val name: String,
   val fullPath: String,

@@ -68,10 +68,21 @@ object SettingsSearchScreen : Screen {
         val focusRequester = remember { FocusRequester() }
 
         var searchQuery by rememberSaveable { mutableStateOf("") }
+        var debouncedSearchQuery by rememberSaveable { mutableStateOf("") }
 
-        val searchResults by remember(searchQuery) {
+        // Debounce search to save battery and reduce UI jank
+        LaunchedEffect(searchQuery) {
+            if (searchQuery.isBlank()) {
+                debouncedSearchQuery = ""
+                return@LaunchedEffect
+            }
+            kotlinx.coroutines.delay(300)
+            debouncedSearchQuery = searchQuery
+        }
+
+        val searchResults by remember(debouncedSearchQuery) {
             derivedStateOf {
-                SearchablePreferences.search(searchQuery) { resId ->
+                SearchablePreferences.search(debouncedSearchQuery) { resId ->
                     resources.getString(resId)
                 }
             }
@@ -184,7 +195,7 @@ object SettingsSearchScreen : Screen {
                             )
                         }
                     }
-                } else if (searchResults.isEmpty()) {
+                } else if (debouncedSearchQuery.isNotEmpty() && searchResults.isEmpty()) {
                     // No results
                     Box(
                         modifier = Modifier.fillMaxSize(),

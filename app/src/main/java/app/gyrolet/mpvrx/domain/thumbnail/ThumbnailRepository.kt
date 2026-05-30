@@ -24,6 +24,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.koin.java.KoinJavaComponent
 import java.io.File
@@ -51,6 +53,7 @@ class ThumbnailRepository(
   private val ongoingOperations = ConcurrentHashMap<String, Deferred<Bitmap?>>()
   private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private val maxConcurrentFolders = 3
+  private val generationSemaphore = Semaphore(3)
 
   private data class FolderState(
     val signature: String,
@@ -110,22 +113,25 @@ class ThumbnailRepository(
               return@async cached
             }
 
-            // Coil's video thumbnail decoder only supports file/content sources. For network videos,
-            // extract a frame directly via MediaMetadataRetriever's HTTP data source.
-            if (isHttpUrl(video.path)) {
-              getOrCreateNetworkVideoThumbnail(video, widthPx, heightPx)?.let { bmp ->
-                synchronized(memoryCache) { memoryCache.put(key, bmp) }
-                _thumbnailReadyKeys.tryEmit(key)
-                return@async bmp
+            val bitmap = generationSemaphore.withPermit {
+              // Coil's video thumbnail decoder only supports file/content sources. For network videos,
+              // extract a frame directly via MediaMetadataRetriever's HTTP data source.
+              if (isHttpUrl(video.path)) {
+                getOrCreateNetworkVideoThumbnail(video, widthPx, heightPx)?.let { bmp ->
+                  synchronized(memoryCache) { memoryCache.put(key, bmp) }
+                  _thumbnailReadyKeys.tryEmit(key)
+                  return@withPermit bmp
+                }
               }
-            }
 
-            val result =
-              runCatching {
-                imageLoader.execute(buildRequest(video))
-              }.getOrNull() as? SuccessResult ?: return@async null
+              val result =
+                runCatching {
+                  imageLoader.execute(buildRequest(video))
+                }.getOrNull() as? SuccessResult ?: return@withPermit null
 
-            val bitmap = scaleBitmap(result.image.toBitmap(), widthPx, heightPx)
+              scaleBitmap(result.image.toBitmap(), widthPx, heightPx)
+            } ?: return@async null
+
             synchronized(memoryCache) {
               memoryCache.put(key, bitmap)
             }
@@ -550,13 +556,14 @@ class ThumbnailRepository(
       )
 
     // Extract directly via MediaMetadataRetriever HTTP streaming (efficient — only seeks header bytes)
-    val bitmap =
+    val bitmap = generationSemaphore.withPermit {
       extractNetworkVideoFrame(
         url = path,
         strategy = strategy,
         targetWidth = widthPx.takeIf { it > 0 },
         targetHeight = heightPx.takeIf { it > 0 },
       )?.let { scaleBitmap(it, widthPx, heightPx) }
+    }
 
     if (bitmap == null) {
       android.util.Log.w("ThumbnailRepository", "All strategies failed for network stream $path")
@@ -613,9 +620,10 @@ class ThumbnailRepository(
         browserPreferences.thumbnailFramePosition.get(),
       )
 
-    val bitmap =
+    val bitmap = generationSemaphore.withPermit {
       extractNetworkVideoFrameViaProxy(path, connection, strategy, widthPx, heightPx)
         ?.let { scaleBitmap(it, widthPx, heightPx) }
+    }
 
     if (bitmap == null) {
       android.util.Log.w("ThumbnailRepository", "All strategies failed for network path $path")
