@@ -5,6 +5,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -16,6 +17,7 @@ private data class AnthropicModel(
   val id: String,
   val display_name: String? = null,
   @SerialName("created_at") val createdAt: String? = null,
+  val pricing: JsonObject? = null,
 )
 
 @Serializable
@@ -95,11 +97,10 @@ class AnthropicClient(
 
       val parsed = json.decodeFromString<AnthropicModelListResponse>(body)
       parsed.data.map { model ->
-        val isFree = FreeModelsConfig.isFree("anthropic", model.id)
         AiModelInfo(
           id = model.id,
           displayName = model.display_name ?: model.id,
-          isFree = isFree,
+          isFree = AiModelPricing.isZeroCost(model.pricing),
         )
       }
     }

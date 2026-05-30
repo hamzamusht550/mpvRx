@@ -98,7 +98,7 @@ class OpenRouterClient(
             p.completion.toDoubleOrNull() == 0.0 &&
             p.image.toDoubleOrNull() == 0.0 &&
             p.request.toDoubleOrNull() == 0.0
-        } ?: FreeModelsConfig.isFree("openrouter", model.id)
+        } ?: false
         AiModelInfo(
           id = model.id,
           displayName = model.name ?: model.id,

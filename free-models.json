@@ -1,8 +1,0 @@
-{
-  "opencode": ["deepseek-v4-flash-free", "mimo-v2.5-free", "nemotron-3-super-free", "big-pickle", "qwen3.6-plus-free", "minimax-m2.5-free"],
-  "together": ["meta-llama/", "mistralai/", "google/", "microsoft/", "Qwen/", "deepseek-ai/", "allenai/", "upstage/"],
-  "openrouter": ["openrouter/auto", "cognitivecomputations/", "google/gemma", "microsoft/phi", "mistralai/mistral", "meta-llama/llama"],
-  "openai": ["gpt-4o-mini", "gpt-4o-realtime", "o1-mini", "o3-mini"],
-  "groq": ["whisper", "distil-whisper", "llama", "gemma", "mixtral", "deepseek"],
-  "anthropic": ["claude-3-haiku", "claude-3-5-haiku"]
-}

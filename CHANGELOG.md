@@ -4,17 +4,18 @@ These notes are written in plain English and focus on what changed for real use.
 
 ## 1.3.9
 
-- **Switched from Gemini to OpenCode Zen AI** — Replaced the old Gemini provider with OpenCode Zen AI across the board. Better performance, more reliable responses, and no more weird API quirks.
-- **Added curl support for Lua scripts** — Lua scripts can now make HTTP requests using curl, opening up endless possibilities for custom scripting without Android/Java bridge hacks.
-- **Free AI models are now detected dynamically** — Instead of keeping a hardcoded list that goes out of date, each provider's free models are determined in real time. OpenRouter checks the actual pricing from the API (zero-cost models = free), and the rest fetch the latest free model list from a remote source with a sensible fallback. No more manually updating prefix lists every time a new free model drops.
-- **Fixed M3U playlist playback from WebDAV/network shares** — Previously only the first file in an M3U would play when loaded over WebDAV or SMB. The rest of the playlist now loads and plays correctly.
-- **Updated Wyzie subtitle sources** — Synced with the latest Wyzie API changes for better subtitle availability.
-- **New toggle for Media Info in the system share sheet** — You can now choose whether to show or hide Media Info in Android's share/open-with chooser. Plus the screenshot filename template description got a polish pass.
-- **Configured CI/CD signing step** — Automated build signing is now set up in the primary workflow so each release goes through without manual intervention.
-- **Hybrid Skip Markers** — Added a brand new "Hybrid" skip marker provider that queries IntroDB, TIDB, and AniSkip concurrently, loading whichever returns timings first (making the playback setup extremely fast). This is now the default provider.
-- **Fixed Seekbar Buffering Jumping** — Resolved an issue where seeking forward caused the buffering indicator to falsely jump ahead or flicker due to stale demuxer cache timings. The buffer bar now remains anchored perfectly to the playhead without gaps across all seekbars.
-- **Collapsible Anime4K Preferences** — Redesigned the Decoder Preferences screen to make the Anime4K shader settings section collapsible, complete with a gorgeous rotating chevron micro-animation.
-- **Custom Developer Documentation** — Created a complete reference guide in `MPVRX_CUSTOM_COMMANDS.md` detailing all MpvRx custom LUA/JS `user-data` properties, panel triggers, keyboard controls, dynamic custom buttons, and real-time battery status telemetry.
+- AI support has been updated. Gemini is removed and OpenCode Zen AI is now available for AI rename, subtitle formatting, and subtitle translation.
+- AI model lists now come from the provider APIs instead of a saved model list in the app. OpenRouter also marks free models using the pricing data returned by OpenRouter itself.
+- Lua and JavaScript scripts can now make HTTP requests through the new curl bridge.
+- Background playback is fixed so repeat keeps working after using the headphone button, and returning to the player no longer restarts the current stream from the beginning.
+- M3U playlists from WebDAV, SMB, and other network sources now continue past the first item properly.
+- Subtitle search has been updated for the latest Wyzie source changes.
+- Added Hybrid Skip Markers. The player can now check IntroDB, TIDB, and AniSkip together and use whichever result is found first.
+- Fixed a seekbar buffering issue where the buffer bar could jump or flicker after seeking.
+- Anime4K settings are now easier to use with a collapsible section in Decoder Preferences.
+- Added a setting to show or hide Media Info from Android's share/open-with screen.
+- Added documentation for custom Lua/JS player commands in `MPVRX_CUSTOM_COMMANDS.md`.
+- Release builds now have automated signing configured in CI.
 
 ## 1.3.8
 

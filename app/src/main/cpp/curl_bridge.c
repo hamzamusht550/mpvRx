@@ -6,6 +6,8 @@
 #include <stdarg.h>
 
 #define MAX_BODY_BYTES (2 * 1024 * 1024)
+#define MAX_HEADER_BYTES (256 * 1024)
+#define MAX_HEADER_COUNT 64
 
 struct buffer {
     char *data;
@@ -14,11 +16,11 @@ struct buffer {
 };
 
 static int buffer_append(struct buffer *b, const char *s, size_t n) {
-    if (b->len + n + 1 >= MAX_BODY_BYTES) {
-        if (b->len + n + 1 > b->cap) {
-            n = MAX_BODY_BYTES - b->len - 1;
-            if (n <= 0) return 0;
-        }
+    if (b->len >= MAX_BODY_BYTES - 1) {
+        return 0;
+    }
+    if (n > MAX_BODY_BYTES - b->len - 1) {
+        n = MAX_BODY_BYTES - b->len - 1;
     }
     size_t needed = b->len + n + 1;
     if (needed > b->cap) {
@@ -36,7 +38,47 @@ static int buffer_append(struct buffer *b, const char *s, size_t n) {
 }
 
 static size_t write_cb(char *ptr, size_t size, size_t nmemb, void *userdata) {
-    return (size_t)buffer_append((struct buffer *)userdata, ptr, size * nmemb);
+    size_t total = size * nmemb;
+    int written = buffer_append((struct buffer *)userdata, ptr, total);
+    return written < 0 ? 0 : (size_t)written;
+}
+
+static size_t header_cb(char *ptr, size_t size, size_t nmemb, void *userdata) {
+    struct buffer *b = (struct buffer *)userdata;
+    size_t total = size * nmemb;
+    if (b->len + total + 1 > MAX_HEADER_BYTES) {
+        return 0;
+    }
+    int written = buffer_append(b, ptr, total);
+    return written < 0 ? 0 : (size_t)written;
+}
+
+static int contains_crlf(const char *s) {
+    if (!s) return 0;
+    while (*s) {
+        if (*s == '\r' || *s == '\n') return 1;
+        s++;
+    }
+    return 0;
+}
+
+static int is_valid_header_key(const char *s) {
+    if (!s || !*s) return 0;
+    while (*s) {
+        unsigned char c = (unsigned char)*s;
+        if (c <= 32 || c >= 127 || c == ':') return 0;
+        s++;
+    }
+    return 1;
+}
+
+static int is_allowed_method(const char *method) {
+    return strcmp(method, "GET") == 0 ||
+           strcmp(method, "HEAD") == 0 ||
+           strcmp(method, "POST") == 0 ||
+           strcmp(method, "PUT") == 0 ||
+           strcmp(method, "PATCH") == 0 ||
+           strcmp(method, "DELETE") == 0;
 }
 
 #include "cJSON.h"
@@ -146,6 +188,37 @@ Java_app_gyrolet_mpvrx_ui_player_ScriptCurlBridge_nativeExecute(
 
     jstring result = NULL;
 
+    if (!url || !*url) {
+        result = to_java_string(env,
+            "{\"status\":0,\"body\":\"\",\"headers\":{},\"error\":\"URL must not be blank\"}");
+        goto cleanup_strings;
+    }
+
+    if (!meth || !is_allowed_method(meth)) {
+        result = to_java_string(env,
+            "{\"status\":0,\"body\":\"\",\"headers\":{},\"error\":\"Unsupported HTTP method\"}");
+        goto cleanup_strings;
+    }
+
+    if (contains_crlf(ctype)) {
+        result = to_java_string(env,
+            "{\"status\":0,\"body\":\"\",\"headers\":{},\"error\":\"Invalid content type\"}");
+        goto cleanup_strings;
+    }
+
+    jsize hcount = j_header_keys ? (*env)->GetArrayLength(env, j_header_keys) : 0;
+    jsize hvcount = j_header_values ? (*env)->GetArrayLength(env, j_header_values) : 0;
+    if (hcount != hvcount) {
+        result = to_java_string(env,
+            "{\"status\":0,\"body\":\"\",\"headers\":{},\"error\":\"Header key/value count mismatch\"}");
+        goto cleanup_strings;
+    }
+    if (hcount > MAX_HEADER_COUNT) {
+        result = to_java_string(env,
+            "{\"status\":0,\"body\":\"\",\"headers\":{},\"error\":\"Too many headers\"}");
+        goto cleanup_strings;
+    }
+
     CURL *curl = curl_easy_init();
     if (!curl) {
         result = to_java_string(env,
@@ -158,12 +231,16 @@ Java_app_gyrolet_mpvrx_ui_player_ScriptCurlBridge_nativeExecute(
     curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 10L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, (long)j_timeout);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, (long)j_timeout);
+    curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+    curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "mpvRx-script-curl/1.0");
 
     struct buffer resp_body = {0};
     struct buffer resp_headers = {0};
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &resp_body);
-    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, write_cb);
+    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, header_cb);
     curl_easy_setopt(curl, CURLOPT_HEADERDATA, &resp_headers);
 
     if (strcmp(meth, "GET") == 0) {
@@ -188,12 +265,27 @@ Java_app_gyrolet_mpvrx_ui_player_ScriptCurlBridge_nativeExecute(
         chunk = curl_slist_append(chunk, h);
     }
 
-    jsize hcount = j_header_keys ? (*env)->GetArrayLength(env, j_header_keys) : 0;
     for (int i = 0; i < hcount; i++) {
         jstring jk = (*env)->GetObjectArrayElement(env, j_header_keys, i);
         jstring jv = (*env)->GetObjectArrayElement(env, j_header_values, i);
+        if (!jk || !jv) {
+            if (jk) (*env)->DeleteLocalRef(env, jk);
+            if (jv) (*env)->DeleteLocalRef(env, jv);
+            result = to_java_string(env,
+                "{\"status\":0,\"body\":\"\",\"headers\":{},\"error\":\"Invalid header\"}");
+            goto cleanup_curl;
+        }
         const char *k = (*env)->GetStringUTFChars(env, jk, NULL);
         const char *v = (*env)->GetStringUTFChars(env, jv, NULL);
+        if (!is_valid_header_key(k) || contains_crlf(v)) {
+            if (k) (*env)->ReleaseStringUTFChars(env, jk, k);
+            if (v) (*env)->ReleaseStringUTFChars(env, jv, v);
+            (*env)->DeleteLocalRef(env, jk);
+            (*env)->DeleteLocalRef(env, jv);
+            result = to_java_string(env,
+                "{\"status\":0,\"body\":\"\",\"headers\":{},\"error\":\"Invalid header\"}");
+            goto cleanup_curl;
+        }
         char h[4096];
         snprintf(h, sizeof(h), "%s: %s", k, v);
         chunk = curl_slist_append(chunk, h);
@@ -222,6 +314,7 @@ Java_app_gyrolet_mpvrx_ui_player_ScriptCurlBridge_nativeExecute(
             "{\"status\":0,\"body\":\"\",\"headers\":{},\"error\":\"OOM building response\"}");
     }
 
+cleanup_curl:
     curl_easy_cleanup(curl);
     if (chunk) curl_slist_free_all(chunk);
     free(resp_body.data);

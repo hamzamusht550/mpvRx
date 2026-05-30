@@ -5,6 +5,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -14,6 +15,7 @@ import java.util.concurrent.TimeUnit
 @Serializable
 private data class OpenAiModel(
   val id: String,
+  val pricing: JsonObject? = null,
 )
 
 @Serializable
@@ -90,11 +92,10 @@ class OpenAiClient(
 
       val parsed = json.decodeFromString<OpenAiModelListResponse>(body)
       parsed.data.map { model ->
-        val isFree = FreeModelsConfig.isFree("openai", model.id)
         AiModelInfo(
           id = model.id,
           displayName = model.id,
-          isFree = isFree,
+          isFree = AiModelPricing.isZeroCost(model.pricing),
         )
       }
     }

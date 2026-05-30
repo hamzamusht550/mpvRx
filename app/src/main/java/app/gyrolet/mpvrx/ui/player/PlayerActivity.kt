@@ -457,7 +457,10 @@ class PlayerActivity :
     setContentView(binding.root)
     setupSystemBarsAutoHide()
 
-    releaseDetachedBackgroundPlaybackBeforeFreshLaunch()
+    val isNotificationReentry = isNotificationReentryIntent(intent)
+    if (!isNotificationReentry) {
+      releaseDetachedBackgroundPlaybackBeforeFreshLaunch()
+    }
     setupMPV()
     viewModel.onMpvCoreInitialized()
     MediaPlaybackService.createNotificationChannel(this)
@@ -539,9 +542,15 @@ class PlayerActivity :
       }
 
       currentPlayableUri = playableUri
-      isReady = false
-      viewModel.onVideoLoadStarted()
-      player.playFile(playableUri)
+      if (isNotificationReentry) {
+        isReady = true
+        viewModel.onVideoLoadCompleted()
+        endBackgroundPlayback()
+      } else {
+        isReady = false
+        viewModel.onVideoLoadStarted()
+        player.playFile(playableUri)
+      }
     }
 
     // Only set orientation immediately if NOT in Video mode
@@ -1030,6 +1039,9 @@ class PlayerActivity :
 
       // Restore video if it was disabled for background playback
       enableVideoAfterBackground()
+      if (!isInPictureInPictureMode && MediaPlaybackService.isRunning()) {
+        endBackgroundPlayback()
+      }
 
       if (!noisyReceiverRegistered) {
         val filter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
@@ -1217,6 +1229,9 @@ class PlayerActivity :
       Log.e(TAG, "Error destroying detached MPV session", e)
     }
   }
+
+  private fun isNotificationReentryIntent(intent: Intent?): Boolean =
+    intent?.action == MediaPlaybackService.ACTION_OPEN_PLAYER && MediaPlaybackService.isRunning()
 
   /**
    * Initializes the MPV player with the necessary paths and observers.
@@ -3068,6 +3083,8 @@ class PlayerActivity :
       MediaPlaybackService.ACTION_OPEN_PLAYER -> {
         isManualBackgroundPlayback = false
         pendingManualBackgroundFinish = false
+        isReady = true
+        viewModel.onVideoLoadCompleted()
         endBackgroundPlayback()
         return
       }
@@ -3723,10 +3740,11 @@ class PlayerActivity :
     // Restore system UI before going to background
     restoreSystemUI()
 
-    // Close the player and return to the browser screen the user came from while
-    // keeping playback alive in the background service.
-    isUserFinishing = true
-    finish()
+    // Keep this activity and MPV instance alive in the task. Finishing here detaches
+    // the observer that owns repeat/playlist EOF handling and forces streams to
+    // reload when the user opens the player again from the notification.
+    disableVideoForBackground()
+    moveTaskToBack(true)
   }
 
   // ==================== PlayerHost ====================
@@ -4399,6 +4417,9 @@ class PlayerActivity :
       Log.d(TAG, "Restoring video after background playback (vid: $lastVid)")
       MPVLib.setPropertyInt("vid", lastVid)
       lastVid = -1
+    } else if ((MPVLib.getPropertyInt("vid") ?: -1) <= 0) {
+      Log.d(TAG, "Restoring video after background playback with auto track selection")
+      MPVLib.setPropertyString("vid", "auto")
     }
   }
 

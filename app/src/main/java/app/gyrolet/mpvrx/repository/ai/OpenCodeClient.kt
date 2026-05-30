@@ -5,6 +5,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -15,6 +16,7 @@ import java.util.concurrent.TimeUnit
 private data class OcModel(
   val id: String,
   val owned_by: String? = null,
+  val pricing: JsonObject? = null,
 )
 
 @Serializable
@@ -84,12 +86,12 @@ class OpenCodeClient(
 
       val parsed = json.decodeFromString<OcModelListResponse>(body)
       parsed.data.map { model ->
-        val isFree = FreeModelsConfig.isFree("opencode", model.id)
         val displayName = if (model.owned_by != null) "${model.id} (${model.owned_by})" else model.id
         AiModelInfo(
           id = model.id,
           displayName = displayName,
-          isFree = isFree,
+          isFree = AiModelPricing.isZeroCost(model.pricing) ||
+            model.id.endsWith("-free", ignoreCase = true),
         )
       }
     }

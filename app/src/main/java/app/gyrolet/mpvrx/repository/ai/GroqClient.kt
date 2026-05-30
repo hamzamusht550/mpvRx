@@ -6,6 +6,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -16,6 +17,7 @@ import java.util.concurrent.TimeUnit
 private data class GroqModel(
   val id: String,
   val owned_by: String? = null,
+  val pricing: JsonObject? = null,
 )
 
 @Serializable
@@ -95,12 +97,11 @@ class GroqClient(
       parsed.data
         .filter { !it.id.startsWith("gpt") && !it.id.startsWith("dall-e") && !it.id.startsWith("tts") && !it.id.startsWith("stt") }
         .map {
-          val isFree = FreeModelsConfig.isFree("groq", it.id)
           val displayName = if (it.owned_by != null) "${it.id} (${it.owned_by})" else it.id
           AiModelInfo(
             id = it.id,
             displayName = displayName,
-            isFree = isFree,
+            isFree = AiModelPricing.isZeroCost(it.pricing),
           )
         }
     }
