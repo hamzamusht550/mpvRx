@@ -1,7 +1,7 @@
 package app.gyrolet.mpvrx.ui.player
 
 import android.util.Log
-import is.xyz.mpv.MPVLib
+import `is`.xyz.mpv.MPVLib
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -28,6 +28,7 @@ class ScriptCurlBridge(
             System.loadLibrary("curl_bridge")
         }
 
+        @JvmStatic
         private external fun nativeExecute(
             url: String,
             method: String,
@@ -116,35 +117,51 @@ class ScriptCurlBridge(
     private fun parseRequest(
         rawJson: String
     ): CurlRequest {
+        val current = rawJson.trim()
 
-        var current = rawJson.trim()
+        // 1. Try to parse directly
+        try {
+            return json.decodeFromString<CurlRequest>(current)
+        } catch (_: Exception) {}
 
-        repeat(5) {
-
+        // 2. If it is wrapped in double quotes, it's a JSON-encoded string.
+        // Try to decode it as a string first, then parse.
+        if (current.startsWith("\"") && current.endsWith("\"")) {
             try {
-                return json.decodeFromString<CurlRequest>(
-                    current
-                )
-            } catch (_: Exception) {
-            }
+                val decoded = json.decodeFromString<String>(current)
+                return json.decodeFromString<CurlRequest>(decoded.trim())
+            } catch (_: Exception) {}
+        }
 
+        // 3. If it starts with '{' but contains escaped quotes (like \" or \\\" or \\\"),
+        // it is a raw JSON object string with corrupted/escaped quotes.
+        // We can manually sanitize it by replacing all backslash-quote sequences with a single double quote.
+        if (current.startsWith("{")) {
             try {
-                val decoded =
-                    json.decodeFromString<String>(
-                        current
-                    )
+                var sanitized = current
+                // Replace any sequence of backslashes followed by a quote with a single double quote
+                // e.g. \\\" -> ", \\" -> ", \" -> "
+                sanitized = sanitized.replace(Regex("""\\+""""), "\"")
+                return json.decodeFromString<CurlRequest>(sanitized)
+            } catch (_: Exception) {}
+        }
 
-                if (decoded == current) {
-                    break
-                }
-
-                current = decoded.trim()
-
+        // 4. Fallback: recursively try to decode as a string if it's still double-encoded
+        var temp = current
+        for (i in 0 until 5) {
+            try {
+                val decoded = json.decodeFromString<String>(temp)
+                if (decoded == temp) break
+                temp = decoded.trim()
+                try {
+                    return json.decodeFromString<CurlRequest>(temp)
+                } catch (_: Exception) {}
             } catch (_: Exception) {
                 break
             }
         }
 
+        // Final try with the original string to throw the proper exception if it still fails
         return json.decodeFromString(current)
     }
 
