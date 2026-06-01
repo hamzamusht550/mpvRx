@@ -869,7 +869,8 @@ fun GestureHandler(
 
                 val hasActiveSub = getTrackSelectionId("sid") > 0 || getTrackSelectionId("secondary-sid") > 0
                 val subPos = MPVLib.getPropertyInt("sub-pos") ?: subtitlesPreferences.subPos.get()
-                val subtitleScreenY = (size.height * (1f - subPos / 100f)).coerceIn(0f, size.height.toFloat())
+                // val subtitleScreenY = (size.height * (subPos / 100f)).coerceIn(0f, size.height.toFloat())
+                val subtitleScreenY = (size.height - (100 - subPos) / 0.08f).coerceIn(0f, size.height.toFloat())
                 val isCenterPinchX = midX in (size.width * 0.2f)..(size.width * 0.8f)
                 val subScale = MPVLib.getPropertyFloat("sub-scale") ?: subtitlesPreferences.subScale.get()
                 val scaleMultiplier = subScale.coerceIn(0.75f, 1.25f)
@@ -1022,7 +1023,9 @@ fun GestureHandler(
 
           val hasActiveSubtitle = getTrackSelectionId("sid") > 0 || getTrackSelectionId("secondary-sid") > 0
           val subPos = MPVLib.getPropertyInt("sub-pos") ?: subtitlesPreferences.subPos.get()
-          val subtitleScreenY = (size.height * (1f - subPos / 100f)).coerceIn(0f, size.height.toFloat())
+          // val subtitleScreenY = (size.height * (subPos / 100f)).coerceIn(0f, size.height.toFloat())
+          val subtitleScreenY = (size.height - (100 - subPos) / 0.08f).coerceIn(0f, size.height.toFloat())
+
 
           val isCenterTouchX = startPosition.x in (size.width * 0.2f)..(size.width * 0.8f)
           val subScale = MPVLib.getPropertyFloat("sub-scale") ?: subtitlesPreferences.subScale.get()
