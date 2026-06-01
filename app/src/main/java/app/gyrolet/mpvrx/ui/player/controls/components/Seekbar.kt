@@ -1,32 +1,45 @@
 package app.gyrolet.mpvrx.ui.player.controls.components
 
+import android.graphics.Bitmap
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -41,15 +54,18 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -72,7 +88,7 @@ fun SeekbarWithTimers(
   position: Float,
   duration: Float,
   onValueChange: (Float) -> Unit,
-  onValueChangeFinished: () -> Unit,
+  onValueChangeFinished: (Float) -> Unit,
   timersInverted: Pair<Boolean, Boolean>,
   positionTimerOnClick: () -> Unit,
   durationTimerOnCLick: () -> Unit,
@@ -227,7 +243,7 @@ private fun SeekbarContent(
   onUserInteractionChange: (Boolean) -> Unit,
   onUserPositionChange: (Float) -> Unit,
   onValueChange: (Float) -> Unit,
-  onValueChangeFinished: () -> Unit,
+  onValueChangeFinished: (Float) -> Unit,
   scope: kotlinx.coroutines.CoroutineScope,
   animatedPosition: Animatable<Float, *>,
   modifier: Modifier = Modifier
@@ -245,6 +261,13 @@ private fun SeekbarContent(
       SeekbarStyle.Standard -> 8.dp
       SeekbarStyle.Wavy -> 8.dp
     }
+  var latestInteractionPosition by remember { mutableFloatStateOf(position) }
+
+  LaunchedEffect(position, isUserInteracting) {
+    if (!isUserInteracting) {
+      latestInteractionPosition = position
+    }
+  }
 
   Box(
     modifier = modifier,
@@ -261,12 +284,13 @@ private fun SeekbarContent(
               val newPosition = (offset.x / size.width) * duration
               onUserInteractionChange(true)
               val targetPos = newPosition.coerceIn(0f, duration)
+              latestInteractionPosition = targetPos
               onUserPositionChange(targetPos)
               onValueChange(targetPos)
               scope.launch {
                 animatedPosition.snapTo(targetPos)
                 onUserInteractionChange(false)
-                onValueChangeFinished()
+                onValueChangeFinished(targetPos)
               }
             }
           )
@@ -274,26 +298,28 @@ private fun SeekbarContent(
         .pointerInput(Unit) {
           detectDragGestures(
             onDragStart = {
+              latestInteractionPosition = position.coerceIn(0f, duration)
               onUserInteractionChange(true)
             },
             onDragEnd = {
               scope.launch {
                 delay(50)
                 onUserInteractionChange(false)
-                onValueChangeFinished()
+                onValueChangeFinished(latestInteractionPosition.coerceIn(0f, duration))
               }
             },
             onDragCancel = {
               scope.launch {
                 delay(50)
                 onUserInteractionChange(false)
-                onValueChangeFinished()
+                onValueChangeFinished(latestInteractionPosition.coerceIn(0f, duration))
               }
             },
           ) { change, _ ->
             change.consume()
             val newPosition = (change.position.x / size.width) * duration
             val targetPos = newPosition.coerceIn(0f, duration)
+            latestInteractionPosition = targetPos
             onUserPositionChange(targetPos)
             onValueChange(targetPos)
           }
@@ -318,13 +344,15 @@ private fun SeekbarContent(
             seekbarStyle = SeekbarStyle.Standard,
             onSeek = { newPosition ->
               onUserInteractionChange(true)
+              latestInteractionPosition = newPosition.coerceIn(0f, duration)
               onUserPositionChange(newPosition)
               onValueChange(newPosition)
             },
             onSeekFinished = {
-              scope.launch { animatedPosition.snapTo(position) }
+              val targetPos = latestInteractionPosition.coerceIn(0f, duration)
+              scope.launch { animatedPosition.snapTo(targetPos) }
               onUserInteractionChange(false)
-              onValueChangeFinished()
+              onValueChangeFinished(targetPos)
             },
             loopStart = loopStart,
             loopEnd = loopEnd,
@@ -357,13 +385,15 @@ private fun SeekbarContent(
             seekbarStyle = SeekbarStyle.Thick,
             onSeek = { newPosition ->
               onUserInteractionChange(true)
+              latestInteractionPosition = newPosition.coerceIn(0f, duration)
               onUserPositionChange(newPosition)
               onValueChange(newPosition)
             },
             onSeekFinished = {
-              scope.launch { animatedPosition.snapTo(position) }
+              val targetPos = latestInteractionPosition.coerceIn(0f, duration)
+              scope.launch { animatedPosition.snapTo(targetPos) }
               onUserInteractionChange(false)
-              onValueChangeFinished()
+              onValueChangeFinished(targetPos)
             },
             loopStart = loopStart,
             loopEnd = loopEnd,
@@ -429,6 +459,103 @@ private fun SeekbarContent(
             start = Offset(endX, 0f),
             end = Offset(endX, trackHeight),
             strokeWidth = 2.dp.toPx(),
+          )
+        }
+      }
+    }
+  }
+}
+
+@Composable
+fun SeekThumbnailPreviewBubble(
+  position: Float,
+  duration: Float,
+  visible: Boolean,
+  bitmap: Bitmap?,
+  isLoading: Boolean,
+  isPortrait: Boolean,
+  modifier: Modifier = Modifier,
+) {
+  AnimatedVisibility(
+    visible = visible && duration > 0f,
+    enter = fadeIn(),
+    exit = fadeOut(),
+    modifier = modifier.fillMaxWidth(),
+  ) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+      val previewWidth = if (isPortrait) 152.dp else 132.dp
+      val previewHeight = previewWidth * 9f / 16f
+      val progress = (position / duration).coerceIn(0f, 1f)
+      val maxOffset = (maxWidth - previewWidth).coerceAtLeast(0.dp)
+      val xOffset = maxOffset * progress
+      val previewShape = RoundedCornerShape(12.dp)
+
+      Column(
+        modifier =
+          Modifier
+            .offset(x = xOffset)
+            .width(previewWidth),
+        horizontalAlignment = Alignment.CenterHorizontally,
+      ) {
+        Surface(
+          modifier =
+            Modifier
+              .fillMaxWidth()
+              .aspectRatio(16f / 9f)
+              .clip(previewShape),
+          shape = previewShape,
+          color = Color.Black.copy(alpha = 0.72f),
+          contentColor = Color.White,
+          border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+          tonalElevation = 0.dp,
+          shadowElevation = 12.dp,
+        ) {
+          Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            if (bitmap != null && !bitmap.isRecycled) {
+              Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+              )
+            } else {
+              Box(
+                modifier =
+                  Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f)),
+              )
+            }
+
+            if (isLoading) {
+              Box(
+                modifier =
+                  Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.20f)),
+                contentAlignment = Alignment.Center,
+              ) {
+                CircularProgressIndicator(
+                  modifier = Modifier.size(18.dp),
+                  color = Color.White,
+                  strokeWidth = 2.dp,
+                )
+              }
+            }
+          }
+        }
+
+        Surface(
+          modifier = Modifier.padding(top = 6.dp),
+          shape = RoundedCornerShape(999.dp),
+          color = Color.Black.copy(alpha = 0.78f),
+          contentColor = Color.White,
+          tonalElevation = 0.dp,
+        ) {
+          Text(
+            text = Utils.prettyTime(position.toInt(), false),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelSmall,
           )
         }
       }

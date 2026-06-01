@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.BroadcastReceiver
 import android.content.pm.ActivityInfo
+import android.graphics.Bitmap
 import android.media.AudioManager
 import android.net.Uri
 import android.os.BatteryManager
@@ -12,6 +13,7 @@ import android.provider.OpenableColumns
 import android.provider.Settings
 import android.util.DisplayMetrics
 import android.util.Log
+import android.util.LruCache
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.core.view.WindowInsetsCompat
@@ -385,7 +387,12 @@ class PlayerViewModel(
   private val metadataCache = object : android.util.LruCache<String, Pair<String, String>>(100) {}
   private val playbackStateDispatcher = Dispatchers.Default.limitedParallelism(1)
   private val renderPrepDispatcher = Dispatchers.Default.limitedParallelism(1)
+  private val seekThumbnailDispatcher = Dispatchers.Default.limitedParallelism(1)
   private val ambientCropRegex = Regex("""^(\d+)x(\d+)""")
+  private val seekThumbnailCache =
+    object : LruCache<String, Bitmap>(SEEK_THUMBNAIL_CACHE_KB) {
+      override fun sizeOf(key: String, value: Bitmap): Int = (value.allocationByteCount / 1024).coerceAtLeast(1)
+    }
 
   private fun updateMetadataCache(key: String, value: Pair<String, String>) {
     metadataCache.put(key, value)
@@ -475,6 +482,29 @@ class PlayerViewModel(
   data class SeekState(val text: String? = null, val amount: Int = 0, val isForwards: Boolean = false)
   private val _seekState = MutableStateFlow(SeekState())
   val seekState: StateFlow<SeekState> = _seekState.asStateFlow()
+
+  data class SeekThumbnailPreview(
+    val visible: Boolean = false,
+    val positionSeconds: Float = 0f,
+    val fraction: Float = 0f,
+    val bitmap: Bitmap? = null,
+    val isLoading: Boolean = false,
+  )
+  private val _seekThumbnailPreview = MutableStateFlow(SeekThumbnailPreview())
+  val seekThumbnailPreview: StateFlow<SeekThumbnailPreview> = _seekThumbnailPreview.asStateFlow()
+  private data class SeekThumbnailRequest(
+    val source: String,
+    val positionSeconds: Float,
+    val durationSeconds: Float,
+    val bucket: Int,
+    val requestId: Long,
+  )
+  private val seekThumbnailRequestLock = Any()
+  private var pendingSeekThumbnailRequest: SeekThumbnailRequest? = null
+  private var seekThumbnailWorkerJob: Job? = null
+  private var seekThumbnailRequestId = 0L
+  private var lastQueuedSeekThumbnailKey: String? = null
+  private var warmedSeekThumbnailSource: String? = null
 
   // Frame navigation
   private val _currentFrame = MutableStateFlow(0)
@@ -928,6 +958,10 @@ class PlayerViewModel(
   }
 
   fun onVideoLoadStarted() {
+    hideSeekThumbnailPreview()
+    seekThumbnailCache.evictAll()
+    warmedSeekThumbnailSource = null
+    runCatching { MPVLib.clearThumbnailCache() }
     _videoOpenAnimationState.update {
       it.copy(
         loadToken = it.loadToken + 1,
@@ -944,6 +978,7 @@ class PlayerViewModel(
         current
       }
     }
+    warmSeekThumbnailer()
   }
 
   private fun setupCustomButtons() {
@@ -1280,6 +1315,10 @@ class PlayerViewModel(
   private companion object {
     const val TAG = "PlayerViewModel"
     const val SEEK_COALESCE_DELAY_MS = 60L
+    const val SEEK_THUMBNAIL_MAX_SIZE = 240
+    const val SEEK_THUMBNAIL_CACHE_KB = 16 * 1024
+    const val SEEK_THUMBNAIL_CACHE_BUCKETS_PER_SECOND = 1f
+    const val SEEK_THUMBNAIL_PREFETCH_RADIUS = 2
     const val PLAYLIST_METADATA_PREFETCH_RADIUS = 40
     const val PLAYLIST_METADATA_PREFETCH_LIMIT = 120
     const val MIN_INTRO_MARKER_DURATION_SEC = 480.0
@@ -2700,6 +2739,215 @@ class PlayerViewModel(
   fun hideSeekBar() {
     _seekBarShown.value = false
     seekBarVisibleForPolling = false
+  }
+
+  fun updateSeekThumbnailPreview(
+    positionSeconds: Float,
+    durationSeconds: Float,
+  ) {
+    val clampedPosition =
+      if (durationSeconds > 0f) {
+        positionSeconds.coerceIn(0f, durationSeconds)
+      } else {
+        positionSeconds.coerceAtLeast(0f)
+      }
+    val fraction =
+      if (durationSeconds > 0f) {
+        (clampedPosition / durationSeconds).coerceIn(0f, 1f)
+      } else {
+        0f
+      }
+
+    val source = resolveSeekThumbnailSource()
+    if (source.isNullOrBlank()) {
+      _seekThumbnailPreview.update {
+        it.copy(
+          visible = true,
+          positionSeconds = clampedPosition,
+          fraction = fraction,
+          isLoading = false,
+        )
+      }
+      return
+    }
+
+    val bucket = seekThumbnailBucket(clampedPosition)
+    val cacheKey = seekThumbnailCacheKey(source, bucket)
+    val cachedBitmap = seekThumbnailCache.get(cacheKey)
+    val nearestCachedBitmap = cachedBitmap ?: findNearestSeekThumbnail(source, bucket)
+    _seekThumbnailPreview.update {
+      it.copy(
+        visible = true,
+        positionSeconds = clampedPosition,
+        fraction = fraction,
+        bitmap = nearestCachedBitmap ?: it.bitmap,
+        isLoading = nearestCachedBitmap == null && it.bitmap == null,
+      )
+    }
+
+    if (cachedBitmap != null || cacheKey == lastQueuedSeekThumbnailKey) return
+
+    val requestId = ++seekThumbnailRequestId
+    lastQueuedSeekThumbnailKey = cacheKey
+    synchronized(seekThumbnailRequestLock) {
+      pendingSeekThumbnailRequest =
+        SeekThumbnailRequest(
+          source = source,
+          positionSeconds = clampedPosition,
+          durationSeconds = durationSeconds,
+          bucket = bucket,
+          requestId = requestId,
+        )
+    }
+    ensureSeekThumbnailWorker()
+  }
+
+  private fun ensureSeekThumbnailWorker() {
+    if (seekThumbnailWorkerJob?.isActive == true) return
+
+    seekThumbnailWorkerJob =
+      viewModelScope.launch(seekThumbnailDispatcher) {
+        while (isActive) {
+          val request =
+            synchronized(seekThumbnailRequestLock) {
+              pendingSeekThumbnailRequest.also { pendingSeekThumbnailRequest = null }
+            } ?: break
+
+          val bitmap = loadSeekThumbnail(request.source, request.bucket, request.durationSeconds)
+          if (bitmap != null) {
+            publishSeekThumbnail(request, bitmap)
+          } else if (request.requestId == seekThumbnailRequestId) {
+            _seekThumbnailPreview.update { it.copy(isLoading = false) }
+          }
+
+          val hasNewerRequest =
+            synchronized(seekThumbnailRequestLock) {
+              pendingSeekThumbnailRequest != null
+            }
+          if (!hasNewerRequest) {
+            prefetchSeekThumbnails(request)
+          }
+        }
+      }
+  }
+
+  fun hideSeekThumbnailPreview() {
+    seekThumbnailRequestId++
+    lastQueuedSeekThumbnailKey = null
+    synchronized(seekThumbnailRequestLock) {
+      pendingSeekThumbnailRequest = null
+    }
+    _seekThumbnailPreview.update {
+      it.copy(
+        visible = false,
+        bitmap = null,
+        isLoading = false,
+      )
+    }
+  }
+
+  private fun warmSeekThumbnailer() {
+    val source = resolveSeekThumbnailSource() ?: return
+    if (source == warmedSeekThumbnailSource) return
+    warmedSeekThumbnailSource = source
+
+    viewModelScope.launch(seekThumbnailDispatcher) {
+      val currentPosition = runCatching { MPVLib.getPropertyDouble("time-pos") ?: 0.0 }.getOrDefault(0.0)
+      loadSeekThumbnail(source, seekThumbnailBucket(currentPosition.toFloat()), _preciseDuration.value)
+    }
+  }
+
+  private fun loadSeekThumbnail(
+    source: String,
+    bucket: Int,
+    durationSeconds: Float,
+  ): Bitmap? {
+    val cacheKey = seekThumbnailCacheKey(source, bucket)
+    seekThumbnailCache.get(cacheKey)?.let { return it }
+
+    val thumbnailTime = seekThumbnailBucketTime(bucket, durationSeconds)
+    val bitmap =
+      runCatching {
+        // Native thumbfast path: generate the preview frame without seeking the active player.
+        MPVLib.grabThumbnailFast(source, thumbnailTime.toDouble(), SEEK_THUMBNAIL_MAX_SIZE)
+      }.getOrNull()
+
+    if (bitmap != null) {
+      seekThumbnailCache.put(cacheKey, bitmap)
+    }
+    return bitmap
+  }
+
+  private fun publishSeekThumbnail(
+    request: SeekThumbnailRequest,
+    bitmap: Bitmap,
+  ) {
+    _seekThumbnailPreview.update { current ->
+      if (!current.visible) {
+        current
+      } else {
+        current.copy(
+          bitmap = bitmap,
+          isLoading = false,
+        )
+      }
+    }
+  }
+
+  private fun prefetchSeekThumbnails(request: SeekThumbnailRequest) {
+    val maxBucket =
+      if (request.durationSeconds > 0f) {
+        seekThumbnailBucket(request.durationSeconds)
+      } else {
+        Int.MAX_VALUE
+      }
+    for (distance in 1..SEEK_THUMBNAIL_PREFETCH_RADIUS) {
+      val hasNewerRequest =
+        synchronized(seekThumbnailRequestLock) {
+          pendingSeekThumbnailRequest != null
+        }
+      if (hasNewerRequest) return
+
+      val nextBucket = request.bucket + distance
+      if (nextBucket <= maxBucket) {
+        loadSeekThumbnail(request.source, nextBucket, request.durationSeconds)
+      }
+
+      val previousBucket = request.bucket - distance
+      if (previousBucket >= 0) {
+        loadSeekThumbnail(request.source, previousBucket, request.durationSeconds)
+      }
+    }
+  }
+
+  private fun resolveSeekThumbnailSource(): String? =
+    host.currentThumbnailSource()?.takeIf { it.isNotBlank() }
+      ?: runCatching { MPVLib.getPropertyString("stream-open-filename") }.getOrNull()?.takeIf { it.isNotBlank() }
+      ?: runCatching { MPVLib.getPropertyString("path") }.getOrNull()?.takeIf { it.isNotBlank() }
+
+  private fun seekThumbnailBucket(positionSeconds: Float): Int =
+    (positionSeconds * SEEK_THUMBNAIL_CACHE_BUCKETS_PER_SECOND).roundToInt().coerceAtLeast(0)
+
+  private fun seekThumbnailBucketTime(
+    bucket: Int,
+    durationSeconds: Float,
+  ): Float =
+    (bucket / SEEK_THUMBNAIL_CACHE_BUCKETS_PER_SECOND)
+      .coerceAtLeast(0f)
+      .let { if (durationSeconds > 0f) it.coerceAtMost(durationSeconds) else it }
+
+  private fun seekThumbnailCacheKey(source: String, bucket: Int): String =
+    "$source|$bucket|$SEEK_THUMBNAIL_MAX_SIZE"
+
+  private fun findNearestSeekThumbnail(
+    source: String,
+    bucket: Int,
+  ): Bitmap? {
+    for (distance in 1..SEEK_THUMBNAIL_PREFETCH_RADIUS) {
+      seekThumbnailCache.get(seekThumbnailCacheKey(source, bucket - distance))?.let { return it }
+      seekThumbnailCache.get(seekThumbnailCacheKey(source, bucket + distance))?.let { return it }
+    }
+    return null
   }
 
   fun lockControls() {

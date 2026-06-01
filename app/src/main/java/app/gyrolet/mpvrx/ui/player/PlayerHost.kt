@@ -34,4 +34,5 @@ interface PlayerHost {
   fun abandonAudioFocus()
   fun currentMediaLookupHint(): String? = null
   fun currentPlayerLookupHints(): PlayerLookupHints = PlayerLookupHints()
+  fun currentThumbnailSource(): String? = null
 }
