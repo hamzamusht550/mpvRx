@@ -332,12 +332,18 @@ class PlayerViewModel(
       "æ¬¡å›ž",
     )
 
+  companion object {
+    private const val AUTO_SHOW_SKIP_CHIP_DURATION = 10.0
+  }
+
   private val _skipSegments = MutableStateFlow<List<SkipSegment>>(emptyList())
   val skipSegments: StateFlow<List<SkipSegment>> = _skipSegments.asStateFlow()
   @Volatile private var skipSegmentsSnapshot: List<SkipSegment> = emptyList()
 
   private val _currentSkippableSegment = MutableStateFlow<SkipSegment?>(null)
   val currentSkippableSegment: StateFlow<SkipSegment?> = _currentSkippableSegment.asStateFlow()
+  private val _showSkipChipAuto = MutableStateFlow(false)
+  val showSkipChipAuto: StateFlow<Boolean> = _showSkipChipAuto.asStateFlow()
   private var pendingIntroLookupTitle: String? = null
 
   private val _introDbStatus = MutableStateFlow(
@@ -1812,6 +1818,7 @@ class PlayerViewModel(
       _skipSegments.value = emptyList()
       skipSegmentsSnapshot = emptyList()
       _currentSkippableSegment.value = null
+      _showSkipChipAuto.value = false
       _introDbStatus.value =
         if (playerPreferences.enableIntroDb.get()) {
           IntroDbStatus()
@@ -1849,6 +1856,8 @@ class PlayerViewModel(
       }
     runCatching {
       _currentSkippableSegment.value = activeSegment
+      _showSkipChipAuto.value =
+        activeSegment != null && (positionSeconds - activeSegment.startSeconds) < AUTO_SHOW_SKIP_CHIP_DURATION
     }
 
     if (paused == true || activeSegment == null) return

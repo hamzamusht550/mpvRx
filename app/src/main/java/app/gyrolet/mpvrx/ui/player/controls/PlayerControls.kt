@@ -242,6 +242,7 @@ fun PlayerControls(
   val chapters by viewModel.chapters.collectAsState(persistentListOf())
   val skipSegments by viewModel.skipSegments.collectAsState(persistentListOf())
   val currentSkippableSegment by viewModel.currentSkippableSegment.collectAsState()
+  val showSkipChipAuto by viewModel.showSkipChipAuto.collectAsState()
   val playlistMode by playerPreferences.playlistMode.collectAsState()
     val haptic = LocalHapticFeedback.current
 
@@ -985,8 +986,12 @@ fun PlayerControls(
           )
         }
 
+        val skipChipVisible =
+          currentSkippableSegment != null &&
+            ((controlsShown && !areControlsLocked) || showSkipChipAuto)
+
         AnimatedVisibility(
-          visible = controlsShown && !areControlsLocked && currentSkippableSegment != null,
+          visible = skipChipVisible,
           enter = fadeIn(playerControlsEnterAnimationSpec()),
           exit = fadeOut(playerControlsExitAnimationSpec()),
           modifier =
