@@ -35,6 +35,8 @@ These notes are written in plain English and focus on what changed for real use.
 - Removed Avif / Jpeg-Xl type images from the settings selection
 - Added Font selection in the Subtitle Settings section.
 - Fixed issue of Lua script when copying specific part Copied whole Lua script.
+- Added Pixel player Style Seekbar in Seekbar types 
+- added Expressive Scrollbar like in Pixel player 
 
 ## 1.3.9
 

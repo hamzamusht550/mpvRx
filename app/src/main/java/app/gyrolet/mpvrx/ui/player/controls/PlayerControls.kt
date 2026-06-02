@@ -1341,8 +1341,8 @@ fun PlayerControls(
               resetControlsTimestamp = System.currentTimeMillis()
               if (useThumbFastSeekPreview) {
                 viewModel.hideSeekThumbnailPreview()
-                viewModel.seekTo(targetPosition.toInt())
               }
+              viewModel.seekTo(targetPosition.toInt())
               viewModel.showControls()
             },
             timersInverted = Pair(false, invertDuration),
@@ -1830,7 +1830,7 @@ private fun CustomStatsPageSixOverlay(
       }
 
       val sessionDrainText = if (startBatteryPercent != null) {
-        val drainPercent = startBatteryPercent!! - currentPercent
+        val drainPercent = startBatteryPercent - currentPercent
         "$drainPercent%"
       } else {
         "0%"
@@ -1838,7 +1838,7 @@ private fun CustomStatsPageSixOverlay(
 
       val activeHours = totalActivePlayTimeMs / 3600000f
       val burnRateText = if (startBatteryPercent != null && activeHours > 0.005f) {
-        val drainPercent = startBatteryPercent!! - currentPercent
+        val drainPercent = startBatteryPercent - currentPercent
         val rate = drainPercent / activeHours
         String.format("%.1f%% / hr", rate)
       } else {
@@ -1846,7 +1846,7 @@ private fun CustomStatsPageSixOverlay(
       }
 
       val estRemainingPlaybackText = if (startBatteryPercent != null && activeHours > 0.005f) {
-        val drainPercent = startBatteryPercent!! - currentPercent
+        val drainPercent = startBatteryPercent - currentPercent
         if (drainPercent > 0) {
           val rate = drainPercent / activeHours
           val hoursLeft = currentPercent / rate
@@ -1861,7 +1861,7 @@ private fun CustomStatsPageSixOverlay(
 
       val peakTempText = if (peakBatteryTemp > 0f) String.format("%.1f°C", peakBatteryTemp) else "--°C"
       val tempRiseText = if (startBatteryTemp != null) {
-        val rise = currentTemp - startBatteryTemp!!
+        val rise = currentTemp - startBatteryTemp
         String.format("%+.1f°C", rise)
       } else {
         "+0.0°C"

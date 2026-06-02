@@ -54,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
@@ -66,6 +67,8 @@ import app.gyrolet.mpvrx.presentation.Screen
 import app.gyrolet.mpvrx.presentation.components.pullrefresh.PullRefreshBox
 import app.gyrolet.mpvrx.ui.browser.cards.PlaylistCard
 import app.gyrolet.mpvrx.ui.browser.components.BrowserTopBar
+import app.gyrolet.mpvrx.ui.browser.components.ExpressiveScrollBar
+import app.gyrolet.mpvrx.ui.browser.components.fastScrollGlyph
 import app.gyrolet.mpvrx.ui.browser.dialogs.DeleteConfirmationDialog
 import app.gyrolet.mpvrx.ui.browser.selection.rememberSelectionManager
 import app.gyrolet.mpvrx.ui.browser.sheets.PlaylistActionSheet
@@ -73,9 +76,6 @@ import app.gyrolet.mpvrx.ui.browser.states.EmptyState
 import app.gyrolet.mpvrx.ui.utils.LocalBackStack
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import my.nanihadesuka.compose.LazyColumnScrollbar
-import my.nanihadesuka.compose.LazyVerticalGridScrollbar
-import my.nanihadesuka.compose.ScrollbarSettings
 import org.koin.compose.koinInject
 
 @Serializable
@@ -372,7 +372,6 @@ object PlaylistScreen : Screen {
         )
       }
     }
-  }
 
   @Composable
   private fun PlaylistListContent(
@@ -397,23 +396,12 @@ object PlaylistScreen : Screen {
 
     val isGridMode = mediaLayoutMode == MediaLayoutMode.GRID
 
-    // Check if at top of list to hide scrollbar during pull-to-refresh
-    val isAtTop by remember {
-      derivedStateOf {
-        if (isGridMode) {
-          gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0
-        } else {
-          listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
-        }
-      }
-    }
-
     // Only show scrollbar if list has more than 20 items
     val hasEnoughItems = playlistsWithCount.size > 20
 
     // Animate scrollbar alpha
     val scrollbarAlpha by androidx.compose.animation.core.animateFloatAsState(
-      targetValue = if (isAtTop || !hasEnoughItems) 0f else 1f,
+      targetValue = if (hasEnoughItems) 1f else 0f,
       animationSpec = androidx.compose.animation.core.spring(
         dampingRatio = app.gyrolet.mpvrx.ui.theme.AppMotion.Effect.Alpha.dampingRatio,
         stiffness = app.gyrolet.mpvrx.ui.theme.AppMotion.Effect.Alpha.stiffness,
@@ -435,40 +423,44 @@ object PlaylistScreen : Screen {
             .fillMaxSize()
             .padding(bottom = navigationBarHeight)
         ) {
-          LazyVerticalGridScrollbar(
+          LazyVerticalGrid(
+            columns = GridCells.Fixed(folderGridColumns),
             state = gridState,
-            settings = ScrollbarSettings(
-              thumbUnselectedColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f * scrollbarAlpha),
-              thumbSelectedColor = MaterialTheme.colorScheme.primary.copy(alpha = scrollbarAlpha),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+              start = 8.dp,
+              end = 8.dp,
             ),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
           ) {
-            LazyVerticalGrid(
-              columns = GridCells.Fixed(folderGridColumns),
-              state = gridState,
-              modifier = Modifier.fillMaxSize(),
-              contentPadding = PaddingValues(
-                start = 8.dp,
-                end = 8.dp,
-              ),
-              horizontalArrangement = Arrangement.spacedBy(8.dp),
-              verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-              items(
-                count = playlistsWithCount.size,
-                key = { playlistsWithCount[it].playlist.id },
-              ) { index ->
-                val playlistWithCount = playlistsWithCount[index]
-                PlaylistCard(
-                  playlist = playlistWithCount.playlist,
-                  itemCount = playlistWithCount.itemCount,
-                  isSelected = selectionManager.isSelected(playlistWithCount),
-                  onClick = { onPlaylistClick(playlistWithCount) },
-                  onLongClick = { onPlaylistLongClick(playlistWithCount) },
-                  onThumbClick = { onPlaylistClick(playlistWithCount) },
-                  isGridMode = true,
-                )
-              }
+            items(
+              count = playlistsWithCount.size,
+              key = { playlistsWithCount[it].playlist.id },
+            ) { index ->
+              val playlistWithCount = playlistsWithCount[index]
+              PlaylistCard(
+                playlist = playlistWithCount.playlist,
+                itemCount = playlistWithCount.itemCount,
+                isSelected = selectionManager.isSelected(playlistWithCount),
+                onClick = { onPlaylistClick(playlistWithCount) },
+                onLongClick = { onPlaylistLongClick(playlistWithCount) },
+                onThumbClick = { onPlaylistClick(playlistWithCount) },
+                isGridMode = true,
+              )
             }
+          }
+          if (hasEnoughItems && scrollbarAlpha > 0.01f) {
+            ExpressiveScrollBar(
+              gridState = gridState,
+              dragLabelProvider = { index: Int ->
+                fastScrollGlyph(playlistsWithCount.getOrNull(index)?.playlist?.name)
+              },
+              modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 4.dp)
+                .graphicsLayer { alpha = scrollbarAlpha },
+            )
           }
         }
       } else {
@@ -479,40 +471,42 @@ object PlaylistScreen : Screen {
             .fillMaxSize()
             .padding(bottom = navigationBarHeight)
         ) {
-          LazyColumnScrollbar(
+          LazyColumn(
             state = listState,
-            settings = ScrollbarSettings(
-              thumbUnselectedColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f * scrollbarAlpha),
-              thumbSelectedColor = MaterialTheme.colorScheme.primary.copy(alpha = scrollbarAlpha),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+              start = 8.dp,
+              end = 8.dp,
             ),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
           ) {
-            LazyColumn(
-              state = listState,
-              modifier = Modifier.fillMaxSize(),
-              contentPadding = PaddingValues(
-                start = 8.dp,
-                end = 8.dp,
-              ),
-              verticalArrangement = Arrangement.spacedBy(0.dp),
-            ) {
-              items(playlistsWithCount, key = { it.playlist.id }) { playlistWithCount ->
-                PlaylistCard(
-                  playlist = playlistWithCount.playlist,
-                  itemCount = playlistWithCount.itemCount,
-                  isSelected = selectionManager.isSelected(playlistWithCount),
-                  onClick = { onPlaylistClick(playlistWithCount) },
-                  onLongClick = { onPlaylistLongClick(playlistWithCount) },
-                  onThumbClick = { onPlaylistClick(playlistWithCount) },
-                  isGridMode = false,
-                )
-              }
+            items(playlistsWithCount, key = { it.playlist.id }) { playlistWithCount ->
+              PlaylistCard(
+                playlist = playlistWithCount.playlist,
+                itemCount = playlistWithCount.itemCount,
+                isSelected = selectionManager.isSelected(playlistWithCount),
+                onClick = { onPlaylistClick(playlistWithCount) },
+                onLongClick = { onPlaylistLongClick(playlistWithCount) },
+                onThumbClick = { onPlaylistClick(playlistWithCount) },
+                isGridMode = false,
+              )
             }
+          }
+          if (hasEnoughItems && scrollbarAlpha > 0.01f) {
+            ExpressiveScrollBar(
+              listState = listState,
+              dragLabelProvider = { index: Int ->
+                fastScrollGlyph(playlistsWithCount.getOrNull(index)?.playlist?.name)
+              },
+              modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 4.dp)
+                .graphicsLayer { alpha = scrollbarAlpha },
+            )
           }
         }
       }
     }
   }
-
-
-
+}
 

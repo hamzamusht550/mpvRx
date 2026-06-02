@@ -69,6 +69,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -87,6 +88,8 @@ import app.gyrolet.mpvrx.ui.browser.cards.VideoCard
 import app.gyrolet.mpvrx.ui.browser.cards.VideoCardUiConfig
 import app.gyrolet.mpvrx.ui.browser.components.BrowserBottomBar
 import app.gyrolet.mpvrx.ui.browser.components.BrowserTopBar
+import app.gyrolet.mpvrx.ui.browser.components.ExpressiveScrollBar
+import app.gyrolet.mpvrx.ui.browser.components.fastScrollGlyph
  import app.gyrolet.mpvrx.ui.browser.dialogs.AddToPlaylistDialog
  import app.gyrolet.mpvrx.ui.browser.dialogs.DeleteConfirmationDialog
  import app.gyrolet.mpvrx.ui.browser.dialogs.FileOperationProgressDialog
@@ -104,6 +107,7 @@ import app.gyrolet.mpvrx.ui.browser.states.EmptyState
 import app.gyrolet.mpvrx.ui.browser.states.PermissionDeniedState
 import app.gyrolet.mpvrx.ui.utils.LocalBackStack
 import app.gyrolet.mpvrx.ui.utils.popSafely
+import app.gyrolet.mpvrx.utils.clipboard.SafeClipboard
 import app.gyrolet.mpvrx.utils.media.CopyPasteOps
 import app.gyrolet.mpvrx.utils.media.MediaUtils
 import app.gyrolet.mpvrx.utils.permission.PermissionUtils
@@ -113,8 +117,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import my.nanihadesuka.compose.LazyColumnScrollbar
-import my.nanihadesuka.compose.ScrollbarSettings
 import org.koin.compose.koinInject
 import kotlin.coroutines.coroutineContext
 
@@ -564,6 +566,20 @@ fun FileSystemBrowserScreen(path: String? = null) {
                 if (videosToShare.isNotEmpty()) {
                   MediaUtils.shareVideos(context, videosToShare)
                 }
+              }
+            },
+            onCopyClick = {
+              val selectedPaths =
+                selectedItems
+                  .map { item ->
+                    when (item) {
+                      is FileSystemItem.Folder -> item.path
+                      is FileSystemItem.VideoFile -> item.video.path
+                    }
+                  }
+                  .distinct()
+              if (selectedPaths.isNotEmpty()) {
+                SafeClipboard.copyPlainText(context, "Selected paths", selectedPaths.joinToString("\n"))
               }
             },
             onPlayClick = {
@@ -1278,19 +1294,12 @@ private fun FileSystemBrowserContent(
         }
       }
 
-      // Check if at top of list to hide scrollbar during pull-to-refresh
-      val isAtTop by remember {
-        derivedStateOf {
-          listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
-        }
-      }
-
       // Only show scrollbar if list has more than 20 items
       val hasEnoughItems = items.size > 20
 
       // Animate scrollbar alpha
       val scrollbarAlpha by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (isAtTop || !hasEnoughItems) 0f else 1f,
+        targetValue = if (hasEnoughItems) 1f else 0f,
         animationSpec = androidx.compose.animation.core.spring(
           dampingRatio = app.gyrolet.mpvrx.ui.theme.AppMotion.Effect.Alpha.dampingRatio,
           stiffness = app.gyrolet.mpvrx.ui.theme.AppMotion.Effect.Alpha.stiffness,
@@ -1436,21 +1445,27 @@ private fun FileSystemBrowserContent(
             }
           }
           
-          // Scrollbar with bottom padding to avoid overlap with navigation
-          Box(
-            modifier = Modifier
-              .fillMaxSize()
-              .padding(bottom = navigationBarHeight)
-          ) {
-            LazyColumnScrollbar(
-              state = listState,
-              settings = ScrollbarSettings(
-                thumbUnselectedColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f * scrollbarAlpha),
-                thumbSelectedColor = MaterialTheme.colorScheme.primary.copy(alpha = scrollbarAlpha),
-              ),
-            ) {
-              // Empty content - scrollbar only
-            }
+          if (hasEnoughItems && scrollbarAlpha > 0.01f) {
+            val scrollbarLabels =
+              remember(items, isAtRoot, breadcrumbs) {
+                buildList<String?> {
+                  if (!isAtRoot && breadcrumbs.isNotEmpty()) add(null)
+                  items.filterIsInstance<FileSystemItem.Folder>().forEach { add(it.name) }
+                  items.filterIsInstance<FileSystemItem.VideoFile>().forEach { add(it.video.displayName) }
+                }
+              }
+
+            ExpressiveScrollBar(
+              listState = listState,
+              dragLabelProvider = { index ->
+                fastScrollGlyph(scrollbarLabels.getOrNull(index))
+              },
+              modifier =
+                Modifier
+                  .align(Alignment.CenterEnd)
+                  .padding(end = 2.dp, top = 6.dp, bottom = navigationBarHeight + 6.dp)
+                  .graphicsLayer { alpha = scrollbarAlpha },
+            )
           }
         }
       }
@@ -1648,21 +1663,25 @@ private fun FileSystemSearchContent(
             }
           }
           
-          // Scrollbar with bottom padding to avoid overlap with navigation
-          Box(
-            modifier = Modifier
-              .fillMaxSize()
-              .padding(bottom = navigationBarHeight)
-          ) {
-            LazyColumnScrollbar(
-              state = listState,
-              settings = ScrollbarSettings(
-                thumbUnselectedColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                thumbSelectedColor = MaterialTheme.colorScheme.primary,
-              ),
-            ) {
-              // Empty content - scrollbar only
-            }
+          if (searchResults.size > 20) {
+            val scrollbarLabels =
+              remember(searchResults) {
+                buildList<String?> {
+                  searchResults.filterIsInstance<FileSystemItem.Folder>().forEach { add(it.name) }
+                  searchResults.filterIsInstance<FileSystemItem.VideoFile>().forEach { add(it.video.displayName) }
+                }
+              }
+
+            ExpressiveScrollBar(
+              listState = listState,
+              dragLabelProvider = { index ->
+                fastScrollGlyph(scrollbarLabels.getOrNull(index))
+              },
+              modifier =
+                Modifier
+                  .align(Alignment.CenterEnd)
+                  .padding(end = 2.dp, top = 6.dp, bottom = navigationBarHeight + 6.dp),
+            )
           }
         }
       }

@@ -50,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
@@ -66,6 +67,8 @@ import app.gyrolet.mpvrx.ui.browser.cards.M3UVideoCard
 import app.gyrolet.mpvrx.ui.browser.cards.VideoCard
 import app.gyrolet.mpvrx.ui.browser.cards.VideoCardUiConfig
 import app.gyrolet.mpvrx.ui.browser.components.BrowserTopBar
+import app.gyrolet.mpvrx.ui.browser.components.ExpressiveScrollBar
+import app.gyrolet.mpvrx.ui.browser.components.fastScrollGlyph
 import app.gyrolet.mpvrx.ui.browser.selection.rememberSelectionManager
 import app.gyrolet.mpvrx.ui.player.PlayerActivity
 import app.gyrolet.mpvrx.ui.utils.LocalBackStack
@@ -75,8 +78,6 @@ import app.gyrolet.mpvrx.utils.media.MediaInfoOps
 import app.gyrolet.mpvrx.utils.media.MediaUtils
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import my.nanihadesuka.compose.LazyColumnScrollbar
-import my.nanihadesuka.compose.ScrollbarSettings
 import org.koin.compose.koinInject
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -322,6 +323,12 @@ data class PlaylistDetailScreen(val playlistId: Int) : Screen {
               }
             } else {
               null
+            },
+            onCopyClick = {
+              val selectedPaths = selectionManager.getSelectedItems().map { it.video.path }.distinct()
+              if (selectedPaths.isNotEmpty()) {
+                SafeClipboard.copyPlainText(context, "Selected paths", selectedPaths.joinToString("\n"))
+              }
             },
             onPlayClick = null, // Don't show play icon in selection mode for playlist
             onSelectAll = { selectionManager.selectAll() },
@@ -681,14 +688,7 @@ private fun PlaylistVideoListContent(
         }
       }
 
-      LazyColumnScrollbar(
-        state = listState,
-        settings = ScrollbarSettings(
-          thumbUnselectedColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f * scrollbarAlpha),
-          thumbSelectedColor = MaterialTheme.colorScheme.primary.copy(alpha = scrollbarAlpha),
-        ),
-        modifier = modifier.fillMaxSize(),
-      ) {
+      Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
           state = listState,
           modifier = Modifier.fillMaxSize(),
@@ -709,7 +709,6 @@ private fun PlaylistVideoListContent(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
               ) {
-                // Use M3UVideoCard for streaming URLs, VideoCard for local files
                 if (isM3uPlaylist) {
                   M3UVideoCard(
                     title = item.video.displayName,
@@ -745,13 +744,13 @@ private fun PlaylistVideoListContent(
                   )
                 }
 
-                // Drag handle - only show when in reorder mode, positioned at the end
                 if (isReorderMode) {
                   IconButton(
                     onClick = { },
-                    modifier = Modifier
-                      .size(48.dp)
-                      .draggableHandle(),
+                    modifier =
+                      Modifier
+                        .size(48.dp)
+                        .draggableHandle(),
                   ) {
                     Icon(
                       imageVector = Icons.Filled.DragHandle,
@@ -763,6 +762,20 @@ private fun PlaylistVideoListContent(
               }
             }
           }
+        }
+
+        if (hasEnoughItems && scrollbarAlpha > 0.01f) {
+          ExpressiveScrollBar(
+            listState = listState,
+            dragLabelProvider = { index ->
+              fastScrollGlyph(videoItems.getOrNull(index)?.video?.displayName)
+            },
+            modifier =
+              Modifier
+                .align(Alignment.CenterEnd)
+                .padding(vertical = 6.dp)
+                .graphicsLayer { alpha = scrollbarAlpha },
+          )
         }
       }
     }

@@ -69,6 +69,7 @@ import app.gyrolet.mpvrx.ui.browser.videolist.VideoSortDialog
 import app.gyrolet.mpvrx.ui.browser.videolist.VideoWithPlaybackInfo
 import app.gyrolet.mpvrx.ui.player.PlayerActivity
 import app.gyrolet.mpvrx.ui.utils.LocalBackStack
+import app.gyrolet.mpvrx.utils.clipboard.SafeClipboard
 import app.gyrolet.mpvrx.utils.history.RecentlyPlayedOps
 import app.gyrolet.mpvrx.utils.media.MediaUtils
 import app.gyrolet.mpvrx.utils.sort.SortUtils
@@ -265,6 +266,12 @@ fun MediaLibraryContent() {
             }
           },
           onShareClick = { selectionManager.shareSelected() },
+          onCopyClick = {
+            val selectedPaths = selectionManager.getSelectedItems().map { it.path }.distinct()
+            if (selectedPaths.isNotEmpty()) {
+              SafeClipboard.copyPlainText(context, "Selected paths", selectedPaths.joinToString("\n"))
+            }
+          },
           onPlayClick = { selectionManager.playSelected() },
           onSelectAll = { selectionManager.selectAll() },
           onInvertSelection = { selectionManager.invertSelection() },

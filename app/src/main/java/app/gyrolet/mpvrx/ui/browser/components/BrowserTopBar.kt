@@ -72,6 +72,7 @@ fun BrowserTopBar(
   isSingleSelection: Boolean = false,
   onInfoClick: (() -> Unit)? = null,
   onShareClick: (() -> Unit)? = null,
+  onCopyClick: (() -> Unit)? = null,
   onPlayClick: (() -> Unit)? = null,
   onPinClick: (() -> Unit)? = null,
   onBlacklistClick: (() -> Unit)? = null,
@@ -93,6 +94,7 @@ fun BrowserTopBar(
       isSingleSelection = isSingleSelection,
       onInfo = onInfoClick,
       onShare = onShareClick,
+      onCopy = onCopyClick,
       onPlay = onPlayClick,
       onPin = onPinClick,
       onBlacklist = onBlacklistClick,
@@ -295,6 +297,7 @@ private fun SelectionTopBar(
   isSingleSelection: Boolean,
   onInfo: (() -> Unit)?,
   onShare: (() -> Unit)?,
+  onCopy: (() -> Unit)?,
   onPlay: (() -> Unit)?,
   onPin: (() -> Unit)?,
   onBlacklist: (() -> Unit)?,
@@ -477,6 +480,20 @@ private fun SelectionTopBar(
           Icon(
             Icons.Filled.Share,
             contentDescription = stringResource(R.string.generic_share),
+            modifier = Modifier.size(24.dp),
+            tint = MaterialTheme.colorScheme.secondary,
+          )
+        }
+      }
+
+      if (onCopy != null) {
+        IconButton(
+          onClick = onCopy,
+          modifier = Modifier.padding(horizontal = 2.dp),
+        ) {
+          Icon(
+            Icons.Filled.ContentCopy,
+            contentDescription = "Copy path",
             modifier = Modifier.size(24.dp),
             tint = MaterialTheme.colorScheme.secondary,
           )
