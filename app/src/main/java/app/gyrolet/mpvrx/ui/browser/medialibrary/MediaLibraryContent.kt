@@ -142,12 +142,10 @@ fun MediaLibraryContent() {
         isInSelectionMode = selectionManager.isInSelectionMode,
         selectedCount = selectionManager.selectedCount,
         totalCount = sortedVideosWithInfo.size,
-        onBackClick = {
-          if (selectionManager.isInSelectionMode) {
-            selectionManager.clear()
-          } else {
-            backstack.removeLastOrNull()
-          }
+        onBackClick = if (selectionManager.isInSelectionMode) {
+          { selectionManager.clear() }
+        } else {
+          null
         },
         onCancelSelection = { selectionManager.clear() },
         onSortClick = { sortDialogOpen.value = true },
