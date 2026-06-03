@@ -392,20 +392,7 @@ data class VideoListScreen(
         
         // Floating Material 3 Button Group overlay with animation
         // Play Store gating is intentionally bypassed here.
-        AnimatedVisibility(
-          visible = showFloatingBottomBar,
-          enter = slideInVertically(
-            animationSpec = spring(dampingRatio = AppMotion.Spatial.Expressive.dampingRatio, stiffness = AppMotion.Spatial.Expressive.stiffness),
-            initialOffsetY = { fullHeight -> fullHeight }
-          ),
-          exit = slideOutVertically(
-            animationSpec = spring(dampingRatio = AppMotion.Spatial.Standard.dampingRatio, stiffness = AppMotion.Spatial.Standard.stiffness),
-            targetOffsetY = { fullHeight -> fullHeight }
-          ),
-          modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .padding(bottom = if (navBarState.shouldHideNavigationBar) 0.dp else navigationBarHeight)
-        ) {
+        if (showFloatingBottomBar) {
           BrowserBottomBar(
             isSelectionMode = true,
             onCopyClick = {
@@ -429,7 +416,10 @@ data class VideoListScreen(
             onDeleteClick = { deleteDialogOpen.value = true },
             onAddToPlaylistClick = { addToPlaylistDialogOpen.value = true },
             showDownscale = selectionManager.selectedCount == 1,
-            showRename = selectionManager.selectedCount > 0
+            showRename = selectionManager.selectedCount > 0,
+            modifier = Modifier
+              .align(Alignment.BottomCenter)
+              .padding(bottom = if (navBarState.shouldHideNavigationBar) 0.dp else navigationBarHeight)
           )
         }
       }
@@ -629,6 +619,10 @@ internal fun VideoListContent(
   val videoGridColumnsLandscape by browserPreferences.videoGridColumnsLandscape.collectAsState()
   val configuration = androidx.compose.ui.platform.LocalConfiguration.current
   val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+  val isTablet = configuration.smallestScreenWidthDp >= 600
+  val bottomPadding = if (showFloatingBottomBar) {
+    if (isTablet) 108.dp else 88.dp
+  } else 16.dp
   val preferredVideoGridColumns = if (isLandscape) videoGridColumnsLandscape else videoGridColumnsPortrait
   val videoGridColumns = remember(configuration.screenWidthDp, preferredVideoGridColumns) {
     responsiveVideoGridColumns(
@@ -875,7 +869,7 @@ internal fun VideoListContent(
               contentPadding = PaddingValues(
                 start = 8.dp,
                 end = 8.dp,
-                bottom = if (showFloatingBottomBar) 88.dp else 16.dp,
+                bottom = bottomPadding,
               ),
               horizontalArrangement = Arrangement.spacedBy(4.dp),
               verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -937,7 +931,7 @@ internal fun VideoListContent(
               contentPadding = PaddingValues(
                 start = 8.dp,
                 end = 8.dp,
-                bottom = if (showFloatingBottomBar) 88.dp else 16.dp,
+                bottom = bottomPadding,
               ),
             ) {
               items(
