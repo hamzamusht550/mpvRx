@@ -872,7 +872,7 @@ fun GestureHandler(
                 val subtitleScreenY = (size.height - (100 - subPos) / 0.08f).coerceIn(0f, size.height.toFloat())
                 val isCenterPinchX = midX in (size.width * 0.2f)..(size.width * 0.8f)
                 val subScale = MPVLib.getPropertyFloat("sub-scale") ?: subtitlesPreferences.subScale.get()
-                val scaleMultiplier = subScale.coerceIn(0.75f, 1.25f)
+                val scaleMultiplier = subScale.coerceIn(0.4f, 3.0f)
                 val lowerBound = -50f * scaleMultiplier
                 val upperBound = 200f * scaleMultiplier
                 val isSubtitlePinch = isCenterPinchX && (subtitleScreenY - midY) in lowerBound..upperBound
@@ -1027,7 +1027,7 @@ fun GestureHandler(
 
           val isCenterTouchX = startPosition.x in (size.width * 0.2f)..(size.width * 0.8f)
           val subScale = MPVLib.getPropertyFloat("sub-scale") ?: subtitlesPreferences.subScale.get()
-          val scaleMultiplier = subScale.coerceIn(0.75f, 1.25f)
+          val scaleMultiplier = subScale.coerceIn(0.4f, 3.0f)
           val lowerBound = -50f * scaleMultiplier
           val upperBound = 200f * scaleMultiplier
           val isSubtitleTouchY = (subtitleScreenY - startPosition.y) in lowerBound..upperBound
