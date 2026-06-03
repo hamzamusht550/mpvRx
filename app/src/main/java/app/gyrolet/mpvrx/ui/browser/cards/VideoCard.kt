@@ -152,12 +152,18 @@ fun VideoCard(
       }
 
       if (isGridMode) {
+        val centerGridTitles by browserPreferences.centerGridTitles.collectAsState()
+        val horizontalAlignment = if (gridColumns == 1) {
+          Alignment.Start
+        } else {
+          if (centerGridTitles) Alignment.CenterHorizontally else Alignment.Start
+        }
         // GRID LAYOUT - Vertical arrangement
         Column(
           modifier = Modifier
             .fillMaxWidth()
             .padding(12.dp),
-          horizontalAlignment = if (gridColumns == 1) Alignment.Start else Alignment.CenterHorizontally,
+          horizontalAlignment = horizontalAlignment,
         ) {
         val thumbnailRepository = koinInject<ThumbnailRepository>()
         val thumbWidthDp = 160.dp
@@ -321,9 +327,13 @@ fun VideoCard(
           maxLines = maxLines,
           overflow = TextOverflow. Ellipsis,
           textAlign = if (useFolderNameStyle) {
-            TextAlign.Center
+            if (centerGridTitles) TextAlign.Center else TextAlign.Start
           } else {
-            if (gridColumns == 1) TextAlign.Start else TextAlign.Center
+            if (gridColumns == 1) {
+              TextAlign.Start
+            } else {
+              if (centerGridTitles) TextAlign.Center else TextAlign.Start
+            }
           },
         )
         if (gridColumns == 1) {

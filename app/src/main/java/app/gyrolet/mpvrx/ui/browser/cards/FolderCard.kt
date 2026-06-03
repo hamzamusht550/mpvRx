@@ -68,6 +68,7 @@ fun FolderCard(
   val showTotalSizeChip by browserPreferences.showTotalSizeChip.collectAsState()
   val showDateChip by browserPreferences.showDateChip.collectAsState()
   val showFolderPath by browserPreferences.showFolderPath.collectAsState()
+  val centerGridTitles by browserPreferences.centerGridTitles.collectAsState()
   val maxLines = if (unlimitedNameLines) Int.MAX_VALUE else 2
   val selectionInset = 2.dp
   val selectionContainerColor =
@@ -131,7 +132,7 @@ fun FolderCard(
           modifier = Modifier
             .fillMaxWidth()
             .padding(12.dp),
-          horizontalAlignment = Alignment.CenterHorizontally,
+          horizontalAlignment = if (centerGridTitles) Alignment.CenterHorizontally else Alignment.Start,
         ) {
           val folderGridColumnsPortrait by browserPreferences.folderGridColumnsPortrait.collectAsState()
           val folderGridColumnsLandscape by browserPreferences.folderGridColumnsLandscape.collectAsState()
@@ -235,8 +236,8 @@ fun FolderCard(
             style = MaterialTheme.typography.titleSmall,
             color = if (isRecentlyPlayed) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface,
             maxLines = maxLines,
-            overflow = TextOverflow. Ellipsis,
-            textAlign = androidx.compose.ui. text.style.TextAlign.Center,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = if (centerGridTitles) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start,
           )
 
           if (showTotalVideosChip && folder.videoCount > 0) {

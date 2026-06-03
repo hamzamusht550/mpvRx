@@ -66,7 +66,7 @@ import app.gyrolet.mpvrx.ui.browser.playlist.ALL_VIDEOS_PLAYLIST_ID
 import app.gyrolet.mpvrx.ui.browser.selection.rememberSelectionManager
 import app.gyrolet.mpvrx.ui.browser.states.EmptyState
 import app.gyrolet.mpvrx.ui.browser.videolist.VideoListContent
-import app.gyrolet.mpvrx.ui.browser.videolist.VideoSortDialog
+import app.gyrolet.mpvrx.ui.browser.dialogs.VideoSortDialog
 import app.gyrolet.mpvrx.ui.browser.videolist.VideoWithPlaybackInfo
 import app.gyrolet.mpvrx.ui.player.PlayerActivity
 import app.gyrolet.mpvrx.ui.utils.LocalBackStack
