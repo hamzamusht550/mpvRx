@@ -1,5 +1,6 @@
 package app.gyrolet.mpvrx.ui.browser.medialibrary
 
+import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -260,7 +261,10 @@ fun MediaLibraryContent() {
             if (selectionManager.isSingleSelection) {
               val video = selectionManager.getSelectedItems().firstOrNull()
               if (video != null) {
-                MediaUtils.playFile(video.path, context, "media_library_info")
+                val intent = Intent(context, app.gyrolet.mpvrx.ui.mediainfo.MediaInfoActivity::class.java)
+                intent.action = Intent.ACTION_VIEW
+                intent.data = video.uri
+                context.startActivity(intent)
                 selectionManager.clear()
               }
             }
