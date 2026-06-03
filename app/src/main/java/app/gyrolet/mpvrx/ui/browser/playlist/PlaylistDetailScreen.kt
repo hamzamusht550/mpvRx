@@ -734,7 +734,7 @@ private fun PlaylistVideoListContent(
                     onClick = { onVideoItemClick(item) },
                     onLongClick = { onVideoItemLongClick(item) },
                     onThumbClick = if (tapThumbnailToSelect) {
-                      { onVideoItemLongClick(item) }
+                      { selectionManager.toggle(item) }
                     } else {
                       { onVideoItemClick(item) }
                     },

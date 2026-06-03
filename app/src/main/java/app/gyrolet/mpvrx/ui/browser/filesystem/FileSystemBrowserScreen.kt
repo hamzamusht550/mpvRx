@@ -1408,7 +1408,7 @@ private fun FileSystemBrowserContent(
                 onClick = { onFolderClick(folder) },
                 onLongClick = null,
                 onThumbClick = if (tapThumbnailToSelect) {
-                  { onFolderLongClick(folder) }
+                  { selectionManager.toggle(folder) }
                 } else {
                   { onFolderClick(folder) }
                 },
@@ -1430,7 +1430,7 @@ private fun FileSystemBrowserContent(
                 onClick = { onVideoClick(videoFile) },
                 onLongClick = null,
                 onThumbClick = if (tapThumbnailToSelect) {
-                  { onVideoLongClick(videoFile) }
+                  { selectionManager.toggle(videoFile) }
                 } else {
                   { onVideoClick(videoFile) }
                 },

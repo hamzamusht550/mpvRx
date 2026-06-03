@@ -979,7 +979,7 @@ private fun GridContent(
           onClick = { onFolderClick(folder) },
           onLongClick = { onFolderLongClick(folder) },
           onThumbClick = if (tapThumbnailToSelect) {
-            { onFolderLongClick(folder) }
+            { selectionManager.toggle(folder) }
           } else {
             { onFolderClick(folder) }
           },
@@ -1055,7 +1055,7 @@ private fun ListContent(
           onClick = { onFolderClick(folder) },
           onLongClick = { onFolderLongClick(folder) },
           onThumbClick = if (tapThumbnailToSelect) {
-            { onFolderLongClick(folder) }
+            { selectionManager.toggle(folder) }
           } else {
             { onFolderClick(folder) }
           },

@@ -897,7 +897,7 @@ internal fun VideoListContent(
                   onClick = { onVideoClick(videoWithInfo.video) },
                   onLongClick = { onVideoLongClick(videoWithInfo.video) },
                   onThumbClick = if (tapThumbnailToSelect) {
-                    { onVideoLongClick(videoWithInfo.video) }
+                    { selectionManager.toggle(videoWithInfo.video) }
                   } else {
                     { onVideoClick(videoWithInfo.video) }
                   },
@@ -957,7 +957,7 @@ internal fun VideoListContent(
                   onClick = { onVideoClick(videoWithInfo.video) },
                   onLongClick = { onVideoLongClick(videoWithInfo.video) },
                   onThumbClick = if (tapThumbnailToSelect) {
-                    { onVideoLongClick(videoWithInfo.video) }
+                    { selectionManager.toggle(videoWithInfo.video) }
                   } else {
                     { onVideoClick(videoWithInfo.video) }
                   },
