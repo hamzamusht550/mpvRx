@@ -72,6 +72,7 @@ import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlpManager
 import app.gyrolet.mpvrx.ui.theme.MpvrxTheme
 import app.gyrolet.mpvrx.utils.history.RecentlyPlayedOps
 import app.gyrolet.mpvrx.utils.media.HttpUtils
+import app.gyrolet.mpvrx.utils.media.JellyfinSessionReporter
 import app.gyrolet.mpvrx.utils.media.listTreeFilesSafely
 import app.gyrolet.mpvrx.utils.media.openPersistedTreeDocument
 import app.gyrolet.mpvrx.utils.media.PlaybackStateEvents
@@ -303,6 +304,8 @@ class PlayerActivity :
   private var mpvInitialized = false // Track MPV initialization state
   private var savePlaybackStateJob: Job? = null // Track ongoing save job
   private var wasPlayingBeforePause = false // Track if video was playing before pause
+  private var jellyfinSessionReporter: JellyfinSessionReporter? = null
+  private var jellyfinProgressJob: Job? = null
   private val screenUnlockPlaybackController = ScreenUnlockPlaybackController()
   private var backgroundServiceSyncJob: Job? = null
   private var deferredFontSyncJob: Job? = null
@@ -856,6 +859,9 @@ class PlayerActivity :
     runCatching {
       cancelSystemBarsAutoHide()
       saveVideoPlaybackState(fileName, immediate = true)
+      if (!keepBackgroundPlaybackAlive) {
+        reportJellyfinStop()
+      }
 
       // Only stop the service if we're not doing manual background playback
       if ((isUserFinishing || isFinishing) && !isManualBackgroundPlayback) {
@@ -1003,6 +1009,7 @@ class PlayerActivity :
         endBackgroundPlayback()
       }
       
+      reportJellyfinStop()
       setReturnIntent()
     }.onFailure { e ->
       Log.e(TAG, "Error during finish", e)
@@ -1023,6 +1030,7 @@ class PlayerActivity :
         endBackgroundPlayback()
       }
       
+      reportJellyfinStop()
       setReturnIntent()
     }.onFailure { e ->
       Log.e(TAG, "Error during finishAndRemoveTask", e)
@@ -2310,6 +2318,11 @@ class PlayerActivity :
         pipHelper.updatePictureInPictureParams()
       }
     }.onFailure { /* Silently ignore PiP update failures */ }
+
+    jellyfinSessionReporter?.let { reporter ->
+      val currentPosMs = (viewModel.pos ?: 0).toLong() * 1000L
+      reporter.reportPlaybackProgress(currentPosMs, isPaused)
+    }
   }
 
   /**
@@ -2529,6 +2542,13 @@ class PlayerActivity :
         extractUriFromIntent(intent)
       }
     currentUri?.let { viewModel.calculateVideoHash(it) }
+
+    reportJellyfinStop()
+    currentUri?.toString()?.let { url ->
+      jellyfinSessionReporter = JellyfinSessionReporter.create(url, lifecycleScope)
+      jellyfinSessionReporter?.reportPlaybackStart((viewModel.pos ?: 0).toLong() * 1000L)
+      startJellyfinProgressLoop()
+    }
 
     // Reset AB loop values when video changes
     viewModel.clearABLoop()
@@ -2898,6 +2918,29 @@ class PlayerActivity :
     }
   }
 
+  private fun startJellyfinProgressLoop() {
+    jellyfinProgressJob?.cancel()
+    jellyfinProgressJob = lifecycleScope.launch {
+      while (isActive) {
+        delay(10000) // Report progress every 10 seconds
+        val reporter = jellyfinSessionReporter ?: continue
+        val currentPosMs = (viewModel.pos ?: 0).toLong() * 1000L
+        val isPaused = viewModel.paused ?: false
+        reporter.reportPlaybackProgress(currentPosMs, isPaused)
+      }
+    }
+  }
+
+  private fun reportJellyfinStop() {
+    jellyfinProgressJob?.cancel()
+    jellyfinProgressJob = null
+    jellyfinSessionReporter?.let { reporter ->
+      val currentPosMs = (viewModel.pos ?: 0).toLong() * 1000L
+      reporter.reportPlaybackStop(currentPosMs)
+      jellyfinSessionReporter = null
+    }
+  }
+
   private fun capturePlaybackStateSnapshot(mediaTitle: String): PlaybackStateSnapshot? {
     if (mediaIdentifier.isBlank()) return null
 
@@ -3147,8 +3190,15 @@ class PlayerActivity :
   private fun setReturnIntent() {
     Log.d(TAG, "Setting return intent")
 
+    val action = if ((callingPackage != null && callingPackage != packageName) ||
+      intent.getBooleanExtra("return_result", false)) {
+      "is.xyz.mpv.MPVActivity.result"
+    } else {
+      RESULT_INTENT
+    }
+
     val resultIntent =
-      Intent(RESULT_INTENT).apply {
+      Intent(action).apply {
         viewModel.pos?.let { putExtra("position", it * MILLISECONDS_TO_SECONDS) }
         viewModel.duration?.let { putExtra("duration", it * MILLISECONDS_TO_SECONDS) }
       }
@@ -4024,6 +4074,7 @@ class PlayerActivity :
     // Save current video's playback state before switching
     if (fileName.isNotBlank()) {
       saveVideoPlaybackState(fileName)
+      reportJellyfinStop()
     }
 
     val uri = playlist[index]
