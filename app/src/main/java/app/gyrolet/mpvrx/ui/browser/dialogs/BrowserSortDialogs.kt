@@ -30,6 +30,7 @@ fun FolderSortDialog(
   val showTotalSizeChip by browserPreferences.showTotalSizeChip.collectAsState()
   val showDateChip by browserPreferences.showDateChip.collectAsState()
   val showFolderPath by browserPreferences.showFolderPath.collectAsState()
+  val showFolderThumbnails by browserPreferences.showFolderThumbnails.collectAsState()
   val unlimitedNameLines by appearancePreferences.unlimitedNameLines.collectAsState()
   val centerGridTitles by browserPreferences.centerGridTitles.collectAsState()
   val folderViewMode by browserPreferences.folderViewMode.collectAsState()
@@ -186,6 +187,13 @@ fun FolderSortDialog(
         )
       )
       if (mediaLayoutMode == MediaLayoutMode.GRID) {
+        add(
+          VisibilityToggle(
+            label = "Folder Thumbnails",
+            checked = showFolderThumbnails,
+            onCheckedChange = { browserPreferences.showFolderThumbnails.set(it) },
+          )
+        )
         add(
           VisibilityToggle(
             label = "Center Titles",

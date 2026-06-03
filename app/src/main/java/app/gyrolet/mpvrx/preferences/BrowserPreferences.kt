@@ -47,6 +47,7 @@ class BrowserPreferences(
   val showTotalSizeChip = preferenceStore.getBoolean("show_total_size_chip", true)
   val showDateChip = preferenceStore.getBoolean("show_date_chip", false)
   val showFolderPath = preferenceStore.getBoolean("show_folder_path", true)
+  val showFolderThumbnails = preferenceStore.getBoolean("show_folder_thumbnails", false)
 
   // Auto-scroll to last played media preference (like MX Player)
   val autoScrollToLastPlayed = preferenceStore.getBoolean("auto_scroll_to_last_played", false)
