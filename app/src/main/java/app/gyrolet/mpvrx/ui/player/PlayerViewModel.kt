@@ -814,6 +814,17 @@ class PlayerViewModel(
       }
     }
 
+    viewModelScope.launch(playbackStateDispatcher) {
+      combine(
+        playerPreferences.customIntroKeywordsEnabled.changes(),
+        playerPreferences.customIntroKeywords.changes(),
+        playerPreferences.customOutroKeywordsEnabled.changes(),
+        playerPreferences.customOutroKeywords.changes()
+      ) { _, _, _, _ -> }.collect {
+        refreshChapterDerivedSegments(chapters.value)
+      }
+    }
+
     // Track selection is now handled by TrackSelector in PlayerActivity
 
     // Restore repeat mode and shuffle state from preferences
@@ -2308,11 +2319,29 @@ class PlayerViewModel(
         }
       }
 
-    val hasIntro = hasKeyword(introKeywordPatterns)
+    val introKeywords = if (playerPreferences.customIntroKeywordsEnabled.get()) {
+      playerPreferences.customIntroKeywords.get()
+        .split(",")
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+    } else {
+      introKeywordPatterns
+    }
+
+    val outroKeywords = if (playerPreferences.customOutroKeywordsEnabled.get()) {
+      playerPreferences.customOutroKeywords.get()
+        .split(",")
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+    } else {
+      outroKeywordPatterns
+    }
+
+    val hasIntro = hasKeyword(introKeywords)
     val hasRecap = hasKeyword(recapKeywordPatterns)
     val hasCredits = hasKeyword(creditsKeywordPatterns)
     val hasPreview = hasKeyword(previewKeywordPatterns)
-    val hasOutro = hasKeyword(outroKeywordPatterns)
+    val hasOutro = hasKeyword(outroKeywords)
     return when {
       hasRecap -> SkipSegmentType.RECAP
       hasCredits -> SkipSegmentType.CREDITS

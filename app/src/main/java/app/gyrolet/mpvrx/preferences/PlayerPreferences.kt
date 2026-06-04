@@ -99,6 +99,11 @@ class PlayerPreferences(
   val autoSkipIntro = preferenceStore.getBoolean("auto_skip_intro", false)
   val autoSkipOutro = preferenceStore.getBoolean("auto_skip_outro", false)
 
+  val customIntroKeywordsEnabled = preferenceStore.getBoolean("custom_intro_keywords_enabled", false)
+  val customIntroKeywords = preferenceStore.getString("custom_intro_keywords", "")
+  val customOutroKeywordsEnabled = preferenceStore.getBoolean("custom_outro_keywords_enabled", false)
+  val customOutroKeywords = preferenceStore.getString("custom_outro_keywords", "")
+
   val repeatMode = preferenceStore.getEnum("repeat_mode", RepeatMode.OFF)
   val shuffleEnabled = preferenceStore.getBoolean("shuffle_enabled", false)
 

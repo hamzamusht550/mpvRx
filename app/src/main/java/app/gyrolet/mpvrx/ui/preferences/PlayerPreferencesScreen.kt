@@ -41,6 +41,8 @@ import me.zhanghai.compose.preference.Preference
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
 import me.zhanghai.compose.preference.SliderPreference
 import app.gyrolet.mpvrx.ui.preferences.components.SwitchPreference
+import me.zhanghai.compose.preference.TextFieldPreference
+import androidx.compose.material3.TextField
 import org.koin.compose.koinInject
 import kotlin.math.roundToInt
 import androidx.compose.ui.text.AnnotatedString
@@ -373,6 +375,98 @@ object PlayerPreferencesScreen : Screen {
                   )
                 },
               )
+
+              if (detectFromChapters) {
+                PreferenceDivider()
+
+                val customIntroKeywordsEnabled by preferences.customIntroKeywordsEnabled.collectAsState()
+                SwitchPreference(
+                  value = customIntroKeywordsEnabled,
+                  onValueChange = preferences.customIntroKeywordsEnabled::set,
+                  title = { Text(stringResource(R.string.pref_custom_intro_keywords_enabled)) },
+                  summary = {
+                    Text(
+                      stringResource(R.string.pref_custom_intro_keywords_summary),
+                      color = MaterialTheme.colorScheme.outline,
+                    )
+                  },
+                )
+
+                if (customIntroKeywordsEnabled) {
+                  PreferenceDivider()
+
+                  val customIntroKeywords by preferences.customIntroKeywords.collectAsState()
+                  TextFieldPreference(
+                    value = customIntroKeywords,
+                    onValueChange = preferences.customIntroKeywords::set,
+                    textToValue = { it },
+                    title = { Text(stringResource(R.string.pref_custom_intro_keywords_title)) },
+                    summary = {
+                      Text(
+                        customIntroKeywords.ifBlank { "Not set" },
+                        color = MaterialTheme.colorScheme.outline,
+                      )
+                    },
+                    textField = { value, onValueChange, _ ->
+                      Column {
+                        Text(stringResource(R.string.pref_custom_intro_keywords_dialog_desc))
+                        TextField(
+                          value = value,
+                          onValueChange = onValueChange,
+                          modifier = Modifier.fillMaxWidth(),
+                          placeholder = { Text("e.g. intro, opening, op") },
+                          singleLine = true,
+                        )
+                      }
+                    },
+                  )
+                }
+
+                PreferenceDivider()
+
+                val customOutroKeywordsEnabled by preferences.customOutroKeywordsEnabled.collectAsState()
+                SwitchPreference(
+                  value = customOutroKeywordsEnabled,
+                  onValueChange = preferences.customOutroKeywordsEnabled::set,
+                  title = { Text(stringResource(R.string.pref_custom_outro_keywords_enabled)) },
+                  summary = {
+                    Text(
+                      stringResource(R.string.pref_custom_outro_keywords_summary),
+                      color = MaterialTheme.colorScheme.outline,
+                    )
+                  },
+                )
+
+                if (customOutroKeywordsEnabled) {
+                  PreferenceDivider()
+
+                  val customOutroKeywords by preferences.customOutroKeywords.collectAsState()
+                  TextFieldPreference(
+                    value = customOutroKeywords,
+                    onValueChange = preferences.customOutroKeywords::set,
+                    textToValue = { it },
+                    title = { Text(stringResource(R.string.pref_custom_outro_keywords_title)) },
+                    summary = {
+                      Text(
+                        customOutroKeywords.ifBlank { "Not set" },
+                        color = MaterialTheme.colorScheme.outline,
+                      )
+                    },
+                    textField = { value, onValueChange, _ ->
+                      Column {
+                        Text(stringResource(R.string.pref_custom_outro_keywords_dialog_desc))
+                        TextField(
+                          value = value,
+                          onValueChange = onValueChange,
+                          modifier = Modifier.fillMaxWidth(),
+                          placeholder = { Text("e.g. outro, ending, ed") },
+                          singleLine = true,
+                        )
+                      }
+                    },
+                  )
+                }
+              }
 
               PreferenceDivider()
 

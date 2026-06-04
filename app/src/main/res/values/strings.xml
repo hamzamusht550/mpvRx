@@ -838,4 +838,14 @@
   <string name="pref_ytdl_prefer_h264_title">Prefer H.264 (AVC)</string>
   <string name="pref_ytdl_prefer_h264_summary">Increases compatibility on older devices but may limit quality</string>
   <string name="pref_ytdl_quality_title">Preferred Quality</string>
+
+  <!-- Customizable Skip Keywords -->
+  <string name="pref_custom_intro_keywords_enabled">Use custom keywords for skipping openings</string>
+  <string name="pref_custom_intro_keywords_summary">Enable user-defined keywords for opening matching instead of default ones</string>
+  <string name="pref_custom_intro_keywords_title">Custom opening keywords</string>
+  <string name="pref_custom_intro_keywords_dialog_desc">Enter comma-separated keywords for openings/intros</string>
+  <string name="pref_custom_outro_keywords_enabled">Use custom keywords for skipping endings</string>
+  <string name="pref_custom_outro_keywords_summary">Enable user-defined keywords for ending matching instead of default ones</string>
+  <string name="pref_custom_outro_keywords_title">Custom ending keywords</string>
+  <string name="pref_custom_outro_keywords_dialog_desc">Enter comma-separated keywords for endings/outros</string>
 </resources>
