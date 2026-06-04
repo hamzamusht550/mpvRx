@@ -2497,6 +2497,7 @@ class PlayerActivity :
     when (eventId) {
       MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED -> {
         isReady = true
+        MPVLib.setPropertyString("vid", "auto")
         viewModel.onVideoLoadCompleted()
         handleFileLoaded()
       }
@@ -3325,6 +3326,7 @@ class PlayerActivity :
       viewModel.onVideoLoadStarted()
       // Avoid blocking UI thread while mpv opens network streams (e.g., HLS).
       lifecycleScope.launch(Dispatchers.Default) {
+        MPVLib.setPropertyString("vid", "no")
         MPVLib.command("loadfile", uri)
       }
     }
@@ -4145,6 +4147,7 @@ class PlayerActivity :
     viewModel.onVideoLoadStarted()
 
     lifecycleScope.launch(Dispatchers.Default) {
+      MPVLib.setPropertyString("vid", "no")
       MPVLib.command("loadfile", playableUri)
     }
 
