@@ -58,6 +58,7 @@ import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import app.gyrolet.mpvrx.presentation.components.PlayerSheet
 import app.gyrolet.mpvrx.ui.player.applyAnime4KShaderChain
 import app.gyrolet.mpvrx.ui.player.applyAnime4KStabilityOptions
+import app.gyrolet.mpvrx.ui.player.applyAnime4KUltraShader
 import app.gyrolet.mpvrx.ui.player.clearAnime4KShaders
 import app.gyrolet.mpvrx.ui.player.selectRuntimeStableAnime4K
 import app.gyrolet.mpvrx.ui.theme.AppMotion
@@ -90,6 +91,7 @@ fun MoreSheet(
   
   val enableAnime4K by decoderPreferences.enableAnime4K.collectAsState()
   val anime4kMode by decoderPreferences.anime4kMode.collectAsState()
+  val anime4kUltraMode by decoderPreferences.anime4kUltraMode.collectAsState()
   val anime4kDarken by decoderPreferences.anime4kDarken.collectAsState()
   val anime4kThin by decoderPreferences.anime4kThin.collectAsState()
   val anime4kDeblur by decoderPreferences.anime4kDeblur.collectAsState()
@@ -273,6 +275,9 @@ fun MoreSheet(
               leadingIcon = null,
               onClick = {
                 decoderPreferences.anime4kMode.set(mode.name)
+                if (mode != Anime4KManager.Mode.OFF) {
+                  decoderPreferences.anime4kUltraMode.set("OFF")
+                }
 
                 // Apply shaders immediately (runtime change)
                 scope.launch(Dispatchers.Default) {
@@ -283,6 +288,42 @@ fun MoreSheet(
                     darken = anime4kDarken,
                     thin = anime4kThin,
                     deblur = anime4kDeblur,
+                    onAnime4KChanged = onAnime4KChanged,
+                  )
+                }
+              }
+            )
+          }
+        }
+
+        Spacer(modifier = Modifier.height(MaterialTheme.spacing.smaller))
+
+        Text(
+            text = stringResource(R.string.anime4k_ultra_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        LazyRow(
+          horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.smaller),
+        ) {
+          items(Anime4KManager.UltraMode.entries) { mode ->
+            FilterChip(
+              label = { Text(stringResource(mode.titleRes)) },
+              selected = anime4kUltraMode == mode.name,
+              enabled = !isHighRes || mode == Anime4KManager.UltraMode.OFF,
+              leadingIcon = null,
+              onClick = {
+                decoderPreferences.anime4kUltraMode.set(mode.name)
+                if (mode != Anime4KManager.UltraMode.OFF) {
+                  decoderPreferences.anime4kMode.set("OFF")
+                }
+
+                // Apply shaders immediately (runtime change)
+                scope.launch(Dispatchers.Default) {
+                  applyAnime4KUltraRuntimeSelection(
+                    anime4kManager = anime4kManager,
+                    mode = mode,
                     onAnime4KChanged = onAnime4KChanged,
                   )
                 }
@@ -326,6 +367,26 @@ private suspend fun applyAnime4KRuntimeSelection(
 
     anime4kManager.setPostFilters(darken = darken, thin = thin, deblur = deblur)
     if (applyAnime4KShaderChain(anime4kManager, selection.mode, selection.quality)) {
+      val useVulkan = (MPVLib.getPropertyString("gpu-api") ?: "") == "vulkan"
+      applyAnime4KStabilityOptions(useVulkan = useVulkan)
+      onAnime4KChanged()
+    }
+  }
+}
+
+private suspend fun applyAnime4KUltraRuntimeSelection(
+  anime4kManager: Anime4KManager,
+  mode: Anime4KManager.UltraMode,
+  onAnime4KChanged: () -> Unit,
+) {
+  runCatching {
+    if (mode == Anime4KManager.UltraMode.OFF) {
+      clearAnime4KShaders()
+      onAnime4KChanged()
+      return
+    }
+
+    if (applyAnime4KUltraShader(anime4kManager, mode)) {
       val useVulkan = (MPVLib.getPropertyString("gpu-api") ?: "") == "vulkan"
       applyAnime4KStabilityOptions(useVulkan = useVulkan)
       onAnime4KChanged()

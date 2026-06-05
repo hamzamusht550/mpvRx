@@ -37,6 +37,13 @@ class Anime4KManager(private val context: Context) {
       "Anime4K_Deblur_DoG.glsl",
       "Anime4K_Deblur_Original.glsl",
       "Ani4Kv2_ArtCNN_C4F32_i2_CMP.glsl",
+      "Anime4K-Ultra.glsl",
+      "Anime4K-Ultra_Sh.glsl",
+      "Anime4K-Ultra_SSh.glsl",
+      "Anime4K-Ultra_DbH.glsl",
+      "Anime4K-Ultra_DbL.glsl",
+      "Anime4K-Ultra_DbM.glsl",
+      "Anime4K-Ultra_DbH_Sharp.glsl",
     )
     val BUILT_IN_SHADER_FILES: Set<String> = REQUIRED_SHADER_FILES.toSet()
     val DEFAULT_QUALITY = Quality.BALANCED
@@ -59,6 +66,18 @@ class Anime4KManager(private val context: Context) {
     B_PLUS(app.gyrolet.mpvrx.R.string.anime4k_mode_b_plus),
     C_PLUS(app.gyrolet.mpvrx.R.string.anime4k_mode_c_plus),
     ARTCNN(app.gyrolet.mpvrx.R.string.anime4k_mode_artcnn)
+  }
+
+  // Anime4K-Ultra modes
+  enum class UltraMode(val titleRes: Int, val shaderFile: String) {
+    OFF(app.gyrolet.mpvrx.R.string.anime4k_ultra_mode_off, ""),
+    STANDARD(app.gyrolet.mpvrx.R.string.anime4k_ultra_mode_standard, "Anime4K-Ultra.glsl"),
+    SHARP(app.gyrolet.mpvrx.R.string.anime4k_ultra_mode_sharp, "Anime4K-Ultra_Sh.glsl"),
+    SOFT_SHARP(app.gyrolet.mpvrx.R.string.anime4k_ultra_mode_soft_sharp, "Anime4K-Ultra_SSh.glsl"),
+    DEBLUR_LIGHT(app.gyrolet.mpvrx.R.string.anime4k_ultra_mode_deblur_light, "Anime4K-Ultra_DbL.glsl"),
+    DEBLUR_MEDIUM(app.gyrolet.mpvrx.R.string.anime4k_ultra_mode_deblur_medium, "Anime4K-Ultra_DbM.glsl"),
+    DEBLUR_HEAVY(app.gyrolet.mpvrx.R.string.anime4k_ultra_mode_deblur_heavy, "Anime4K-Ultra_DbH.glsl"),
+    DEBLUR_HEAVY_SHARP(app.gyrolet.mpvrx.R.string.anime4k_ultra_mode_deblur_heavy_sharp, "Anime4K-Ultra_DbH_Sharp.glsl")
   }
 
   private var shaderDir: File? = null
@@ -370,6 +389,13 @@ class Anime4KManager(private val context: Context) {
     }
 
     return shaders
+  }
+
+  fun getUltraShaderPath(mode: UltraMode): String? {
+    if (mode == UltraMode.OFF) return null
+    if (!isInitialized && !initialize()) return null
+    val file = getShaderFile(mode.shaderFile)
+    return if (file.exists()) file.absolutePath else null
   }
 
   private fun getShaderFile(fileName: String): File {

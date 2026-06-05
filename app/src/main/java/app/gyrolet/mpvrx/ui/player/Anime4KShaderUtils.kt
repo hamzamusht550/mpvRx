@@ -119,6 +119,26 @@ internal fun applyAnime4KShaderChain(
   return true
 }
 
+internal fun applyAnime4KUltraShader(
+  anime4kManager: Anime4KManager,
+  mode: Anime4KManager.UltraMode,
+): Boolean {
+  if (!anime4kManager.initialize()) {
+    return false
+  }
+
+  val shaderPath = anime4kManager.getUltraShaderPath(mode)
+  if (shaderPath == null) {
+    return false
+  }
+
+  withPreservedVideoGeometry {
+    val retainedShaders = currentShaderList().filterNot(::isBuiltInAnime4KShaderPath)
+    setShaderList(listOf(shaderPath) + retainedShaders)
+  }
+  return true
+}
+
 internal fun applyAnime4KStabilityOptions(useVulkan: Boolean) {
   // OpenGL-only tuning should not be pushed onto the Vulkan backend.
   if (!useVulkan) {

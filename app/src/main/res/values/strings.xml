@@ -302,6 +302,15 @@
   <string name="pref_anime4k_thin_summary">Adds line thinning after the main upscaler.</string>
   <string name="pref_anime4k_deblur_title">Anime4K deblur</string>
   <string name="pref_anime4k_deblur_summary">Adds the DoG deblur pass before darken/thin, costs more GPU time.</string>
+  <string name="anime4k_ultra_title">Anime4K Ultra Presets</string>
+  <string name="anime4k_ultra_mode_off">Off</string>
+  <string name="anime4k_ultra_mode_standard">Standard</string>
+  <string name="anime4k_ultra_mode_sharp">Sharpen</string>
+  <string name="anime4k_ultra_mode_soft_sharp">Soften+Sharpen</string>
+  <string name="anime4k_ultra_mode_deblur_light">Deblur (Light)</string>
+  <string name="anime4k_ultra_mode_deblur_medium">Deblur (Medium)</string>
+  <string name="anime4k_ultra_mode_deblur_heavy">Deblur (Heavy)</string>
+  <string name="anime4k_ultra_mode_deblur_heavy_sharp">Deblur+Sharpen</string>
   <string name="pref_about_title">About</string>
   <string name="pref_about_summary">Acknowledgments, licenses</string>
   <string name="pref_about_oss_libraries">Libraries</string>

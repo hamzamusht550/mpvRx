@@ -372,6 +372,8 @@ git push origin v1.3.1-preview.1
 - [mpv-android](https://github.com/mpv-android)
 - [mpvExtended](https://github.com/marlboro-advance/mpvEx)
 - [mpvKt](https://github.com/abdallahmehiz/mpvKt)
+- [PixelPlayer](https://github.com/theovilardo/PixelPlayer) 
+- [MpvRex](https://github.com/sfsakhawat999/mpvRex)
 - [Next Player](https://github.com/anilbeesetti/nextplayer)
 - [Gramophone](https://github.com/FoedusProgramme/Gramophone)
 - [hdr-toys](https://github.com/natural-harmonia-gropius/hdr-toys)
