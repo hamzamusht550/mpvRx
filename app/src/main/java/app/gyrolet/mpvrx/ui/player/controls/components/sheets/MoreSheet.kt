@@ -245,10 +245,11 @@ fun MoreSheet(
       }
 
       // Shaders Controls
-      if (enableAnime4K && (!gpuNext || useVulkan)) {
-        val isHighRes = (videoWidth ?: 0) >= 3840 || (videoHeight ?: 0) >= 2160
+      val isHighRes = (videoWidth ?: 0) >= 3840 || (videoHeight ?: 0) >= 2160
 
-        // Presets (Mode) - Now on Top
+      // Standard Anime4K: needs legacy gpu or gpu-next+Vulkan
+      if (enableAnime4K && (!gpuNext || useVulkan)) {
+
         Text(
             text = stringResource(R.string.anime4k_mode_title),
             style = MaterialTheme.typography.titleMedium,
@@ -275,6 +276,7 @@ fun MoreSheet(
               leadingIcon = null,
               onClick = {
                 decoderPreferences.anime4kMode.set(mode.name)
+                decoderPreferences.enableAnime4KUltra.set(false)
                 if (mode != Anime4KManager.Mode.OFF) {
                   decoderPreferences.anime4kUltraMode.set("OFF")
                 }
@@ -295,7 +297,10 @@ fun MoreSheet(
             )
           }
         }
+      }
 
+      // Anime4K Ultra: requires gpu-next + Vulkan
+      if (gpuNext && useVulkan) {
         Spacer(modifier = Modifier.height(MaterialTheme.spacing.smaller))
 
         Text(
@@ -315,6 +320,7 @@ fun MoreSheet(
               leadingIcon = null,
               onClick = {
                 decoderPreferences.anime4kUltraMode.set(mode.name)
+                decoderPreferences.enableAnime4KUltra.set(mode != Anime4KManager.UltraMode.OFF)
                 if (mode != Anime4KManager.UltraMode.OFF) {
                   decoderPreferences.anime4kMode.set("OFF")
                 }
@@ -331,7 +337,6 @@ fun MoreSheet(
             )
           }
         }
-
       }
     }
   }

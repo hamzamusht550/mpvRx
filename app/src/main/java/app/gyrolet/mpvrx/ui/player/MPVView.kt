@@ -427,21 +427,19 @@ class MPVView(
     activeGpuApi: String,
   ) {
     runCatching {
-      val enabled = decoderPreferences.enableAnime4K.get()
-      if (!enabled) {
-        clearAnime4KShaders()
-        return
-      }
-
-      // Anime4K requires a Vulkan-backed gpu-next path, or the legacy gpu backend.
+      val isGpuNext = activeVo == "gpu-next"
       val useVulkan = activeGpuApi == "vulkan"
-      if (activeVo == "gpu-next" && !useVulkan) {
-        Log.w(TAG, "Skipping Anime4K because gpu-next is active without Vulkan")
-        return
-      }
 
+      // ── Anime4K Ultra (requires gpu-next + Vulkan) ────────────────────────
+      val enableUltra = decoderPreferences.enableAnime4KUltra.get()
       val ultraModeStr = decoderPreferences.anime4kUltraMode.get()
-      if (ultraModeStr != "OFF") {
+      if (enableUltra && ultraModeStr != "OFF") {
+        if (!isGpuNext || !useVulkan) {
+          Log.w(TAG, "Anime4K Ultra requires gpu-next + Vulkan — skipping")
+          clearAnime4KShaders()
+          return
+        }
+
         val ultraMode = try {
           Anime4KManager.UltraMode.valueOf(ultraModeStr)
         } catch (e: IllegalArgumentException) {
@@ -458,6 +456,19 @@ class MPVView(
         } else {
           Log.w(TAG, "Anime4K Ultra shader failed to apply for mode=$ultraMode")
         }
+        return
+      }
+
+      // ── Standard Anime4K (requires master switch) ─────────────────────────
+      val enabled = decoderPreferences.enableAnime4K.get()
+      if (!enabled) {
+        clearAnime4KShaders()
+        return
+      }
+
+      // Standard mode needs legacy gpu OR gpu-next+Vulkan
+      if (isGpuNext && !useVulkan) {
+        Log.w(TAG, "Skipping standard Anime4K — gpu-next without Vulkan")
         return
       }
 

@@ -267,13 +267,117 @@ object DecoderPreferencesScreen : Screen {
               )
 
               PreferenceDivider()
-              
+
+              val enableAnime4KUltra by preferences.enableAnime4KUltra.collectAsState()
+              val anime4kUltraMode by preferences.anime4kUltraMode.collectAsState()
+              var showUltraGpuNextWarning by remember { mutableStateOf(false) }
+
+              SwitchPreference(
+                value = enableAnime4KUltra,
+                onValueChange = { enabled ->
+                  if (enabled && (!gpuNext || !useVulkan)) {
+                    showUltraGpuNextWarning = true
+                    return@SwitchPreference
+                  }
+                  preferences.enableAnime4KUltra.set(enabled)
+                  if (enabled) {
+                    if (anime4kUltraMode == "OFF") {
+                      preferences.anime4kUltraMode.set(Anime4KManager.UltraMode.STANDARD.name)
+                    }
+                    preferences.anime4kMode.set("OFF")
+                  } else {
+                    preferences.anime4kUltraMode.set("OFF")
+                  }
+                },
+                title = { Text(stringResource(R.string.pref_anime4k_ultra_title)) },
+                summary = {
+                  Column {
+                    Text(
+                      stringResource(R.string.pref_anime4k_ultra_summary),
+                      color = MaterialTheme.colorScheme.outline,
+                    )
+                    Text(
+                      text = "github.com/Th-Underscore/Anime4K-Ultra",
+                      color = MaterialTheme.colorScheme.primary,
+                      style = MaterialTheme.typography.bodySmall,
+                      textDecoration = TextDecoration.Underline,
+                      modifier = Modifier.clickable {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Th-Underscore/Anime4K-Ultra"))
+                        context.startActivity(intent)
+                      }
+                    )
+                  }
+                },
+              )
+
+              if (enableAnime4KUltra) {
+                PreferenceDivider()
+
+                val currentUltraMode = runCatching { Anime4KManager.UltraMode.valueOf(anime4kUltraMode) }
+                  .getOrDefault(Anime4KManager.UltraMode.OFF)
+
+                ListPreference(
+                  value = currentUltraMode,
+                  onValueChange = { mode ->
+                    preferences.anime4kUltraMode.set(mode.name)
+                    if (mode == Anime4KManager.UltraMode.OFF) {
+                      preferences.enableAnime4KUltra.set(false)
+                    } else {
+                      preferences.enableAnime4KUltra.set(true)
+                      preferences.anime4kMode.set("OFF")
+                    }
+                  },
+                  values = Anime4KManager.UltraMode.entries,
+                  valueToText = { AnnotatedString(context.getString(it.titleRes)) },
+                  title = { Text(stringResource(R.string.anime4k_ultra_mode_label)) },
+                  summary = {
+                    Text(
+                      stringResource(currentUltraMode.titleRes),
+                      color = MaterialTheme.colorScheme.outline,
+                    )
+                  },
+                )
+              }
+
+              if (showUltraGpuNextWarning) {
+                AlertDialog(
+                  onDismissRequest = { showUltraGpuNextWarning = false },
+                  title = { Text(stringResource(R.string.pref_anime4k_ultra_title)) },
+                  text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                      Text(stringResource(R.string.pref_anime4k_ultra_gpu_next_required))
+                    }
+                  },
+                  confirmButton = {
+                    Button(onClick = {
+                      preferences.gpuNext.set(true)
+                      preferences.useVulkan.set(true)
+                      preferences.enableAnime4KUltra.set(true)
+                      if (anime4kUltraMode == "OFF") {
+                        preferences.anime4kUltraMode.set(Anime4KManager.UltraMode.STANDARD.name)
+                      }
+                      preferences.anime4kMode.set("OFF")
+                      showUltraGpuNextWarning = false
+                    }) {
+                      Text(stringResource(R.string.pref_decoder_gpu_next_enable_anyway))
+                    }
+                  },
+                  dismissButton = {
+                    TextButton(onClick = { showUltraGpuNextWarning = false }) {
+                      Text(stringResource(R.string.generic_cancel))
+                    }
+                  },
+                )
+              }
+
+              PreferenceDivider()
+
               val enableAnime4K by preferences.enableAnime4K.collectAsState()
               SwitchPreference(
                 value = enableAnime4K,
                 onValueChange = { enabled ->
                     preferences.enableAnime4K.set(enabled)
-                    if (enabled && !useVulkan) { // Only disable GPU Next if Vulkan is disabled
+                    if (enabled && !useVulkan) {
                         preferences.gpuNext.set(false)
                     }
                     if (enabled) {

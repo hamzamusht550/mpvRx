@@ -276,7 +276,7 @@
   <string name="pref_advanced_enable_recently_played_title">Recently Played</string>
   <string name="pref_advanced_enable_recently_played_summary">Track and display recently played videos and playlists</string>
   <string name="pref_advanced_features_tooltip">Enable experimental or advanced features such as stats page and Anime4K upscaling</string>
-  <string name="pref_anime4k_title">Anime4K upscaling (Experimental)</string>
+  <string name="pref_anime4k_title">Anime4K Upscaling</string>
   <string name="pref_anime4k_summary">Enable Anime4K upscaling filter</string>
   <string name="pref_anime4k_incompatibility">Anime4K Incompatibility</string>
   <string name="pref_anime4k_gpu_next_error">Anime4K requires either legacy gpu, or gpu-next with Vulkan enabled. gpu-next on OpenGL will fall back to legacy gpu for shader compatibility.</string>
@@ -302,6 +302,10 @@
   <string name="pref_anime4k_thin_summary">Adds line thinning after the main upscaler.</string>
   <string name="pref_anime4k_deblur_title">Anime4K deblur</string>
   <string name="pref_anime4k_deblur_summary">Adds the DoG deblur pass before darken/thin, costs more GPU time.</string>
+  <string name="pref_anime4k_ultra_title">Anime4K Ultra Fast Upscaling</string>
+  <string name="pref_anime4k_ultra_summary">Lighter, faster pipeline combining FSR with line-thinning</string>
+  <string name="pref_anime4k_ultra_gpu_next_required">Anime4K Ultra requires gpu-next and Vulkan enabled</string>
+  <string name="anime4k_ultra_mode_label">Ultra preset</string>
   <string name="anime4k_ultra_title">Anime4K Ultra Presets</string>
   <string name="anime4k_ultra_mode_off">Off</string>
   <string name="anime4k_ultra_mode_standard">Standard</string>
