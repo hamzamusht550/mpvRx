@@ -1,5 +1,6 @@
 package app.gyrolet.mpvrx.ui.browser.dialogs
 
+import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -409,7 +410,7 @@ private fun GridColumnsNextSection(
         }
         Slider(
           value = folderGridColumnSelector.currentValue.toFloat(),
-          onValueChange = { folderGridColumnSelector.onValueChange(it.toInt()) },
+          onValueChange = { folderGridColumnSelector.onValueChange(it.roundToInt()) },
           valueRange = folderGridColumnSelector.valueRange,
           steps = folderGridColumnSelector.steps,
           modifier = Modifier.fillMaxWidth(),
@@ -438,7 +439,7 @@ private fun GridColumnsNextSection(
         }
         Slider(
           value = videoGridColumnSelector.currentValue.toFloat(),
-          onValueChange = { videoGridColumnSelector.onValueChange(it.toInt()) },
+          onValueChange = { videoGridColumnSelector.onValueChange(it.roundToInt()) },
           valueRange = videoGridColumnSelector.valueRange,
           steps = videoGridColumnSelector.steps,
           modifier = Modifier.fillMaxWidth(),
