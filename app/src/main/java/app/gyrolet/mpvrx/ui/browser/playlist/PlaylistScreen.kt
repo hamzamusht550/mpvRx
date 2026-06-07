@@ -6,6 +6,7 @@ import app.gyrolet.mpvrx.ui.icons.Icons
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
@@ -43,6 +44,7 @@ import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -388,11 +390,9 @@ object PlaylistScreen : Screen {
   ) {
     val browserPreferences = koinInject<app.gyrolet.mpvrx.preferences.BrowserPreferences>()
     val mediaLayoutMode by browserPreferences.mediaLayoutMode.collectAsState()
+    val manualGridColumnsEnabled by browserPreferences.manualGridColumnsEnabled.collectAsState()
     val folderGridColumnsPortrait by browserPreferences.folderGridColumnsPortrait.collectAsState()
-  val folderGridColumnsLandscape by browserPreferences.folderGridColumnsLandscape.collectAsState()
-  val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-  val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-  val folderGridColumns = if (isLandscape) folderGridColumnsLandscape else folderGridColumnsPortrait
+    val folderGridColumnsLandscape by browserPreferences.folderGridColumnsLandscape.collectAsState()
 
     val isGridMode = mediaLayoutMode == MediaLayoutMode.GRID
 
@@ -418,11 +418,24 @@ object PlaylistScreen : Screen {
       if (isGridMode) {
         // Grid layout
         val navigationBarHeight = app.gyrolet.mpvrx.ui.browser.LocalNavigationBarHeight.current
-        Box(
+        BoxWithConstraints(
           modifier = Modifier
             .fillMaxSize()
             .padding(bottom = navigationBarHeight)
         ) {
+          val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+          val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+          val folderGridColumnsPref = if (isLandscape) folderGridColumnsLandscape else folderGridColumnsPortrait
+          val folderGridColumns = if (manualGridColumnsEnabled) {
+            folderGridColumnsPref.coerceAtLeast(1)
+          } else {
+            val contentHorizontalPadding = 8.dp
+            val itemSpacing = 8.dp
+            val usableWidth = maxWidth - (contentHorizontalPadding * 2) - itemSpacing
+            val folderMinWidth = 100.dp
+            (usableWidth / folderMinWidth).toInt().coerceAtLeast(1)
+          }
+
           LazyVerticalGrid(
             columns = GridCells.Fixed(folderGridColumns),
             state = gridState,

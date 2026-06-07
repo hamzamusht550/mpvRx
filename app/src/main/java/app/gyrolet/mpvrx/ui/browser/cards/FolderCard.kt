@@ -2,6 +2,7 @@ package app.gyrolet.mpvrx.ui.browser.cards
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -78,29 +79,39 @@ fun FolderCard(
   val showFolderPath by browserPreferences.showFolderPath.collectAsState()
   val centerGridTitles by browserPreferences.centerGridTitles.collectAsState()
   val showFolderThumbnails by browserPreferences.showFolderThumbnails.collectAsState()
+  val manualGridColumnsEnabled by browserPreferences.manualGridColumnsEnabled.collectAsState()
+  val folderGridColumnsPortrait by browserPreferences.folderGridColumnsPortrait.collectAsState()
+  val folderGridColumnsLandscape by browserPreferences.folderGridColumnsLandscape.collectAsState()
   val context = androidx.compose.ui.platform.LocalContext.current
   val density = LocalDensity.current
   val thumbnailRepository = koinInject<ThumbnailRepository>()
   var folderThumbnail by remember(folder.bucketId) { mutableStateOf<android.graphics.Bitmap?>(null) }
 
-  LaunchedEffect(folder.bucketId, showFolderThumbnails, isGridMode) {
+  LaunchedEffect(folder.bucketId, showFolderThumbnails, isGridMode, manualGridColumnsEnabled, folderGridColumnsPortrait, folderGridColumnsLandscape) {
     if (isGridMode && showFolderThumbnails) {
       withContext(Dispatchers.IO) {
         val videos = app.gyrolet.mpvrx.repository.MediaFileRepository.getVideosInFolder(context, folder.bucketId)
         if (videos.isNotEmpty()) {
           val configuration = context.resources.configuration
           val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-          val folderGridColumnsPortraitVal = browserPreferences.folderGridColumnsPortrait.get()
-          val folderGridColumnsLandscapeVal = browserPreferences.folderGridColumnsLandscape.get()
-          val folderGridColumns = if (isLandscape) folderGridColumnsLandscapeVal else folderGridColumnsPortraitVal
           val screenWidthDp = configuration.screenWidthDp.dp
+          val contentHorizontalPadding = 8.dp
+          val itemSpacing = 2.dp
+          val usableWidth = screenWidthDp - (contentHorizontalPadding * 2) - itemSpacing
+          val folderMinWidth = 100.dp
+          val folderGridColumnsPref = if (isLandscape) folderGridColumnsLandscape else folderGridColumnsPortrait
+          val folderGridColumns = if (manualGridColumnsEnabled) {
+            folderGridColumnsPref.coerceAtLeast(1)
+          } else {
+            (usableWidth / folderMinWidth).toInt().coerceAtLeast(1)
+          }
           val horizontalPadding = 32.dp
           val spacing = 8.dp
           val thumbWidthDp = if (folderGridColumns > 1) {
             val totalSpacing = spacing * (folderGridColumns - 1)
             ((screenWidthDp - horizontalPadding - totalSpacing) / folderGridColumns).coerceAtLeast(120.dp)
           } else {
-            160.dp
+            (screenWidthDp - horizontalPadding).coerceAtLeast(160.dp)
           }
           val aspect = 16f / 9f
           val thumbWidthPx = with(density) { thumbWidthDp.roundToPx() }
@@ -112,6 +123,8 @@ fun FolderCard(
           }
         }
       }
+    } else {
+      folderThumbnail = null
     }
   }
 
@@ -173,19 +186,34 @@ fun FolderCard(
       }
 
       if (isGridMode) {
+        val configuration = LocalConfiguration.current
+        val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
+        val contentHorizontalPadding = 8.dp
+        val itemSpacing = 2.dp
+        val usableWidth = screenWidthDp - (contentHorizontalPadding * 2) - itemSpacing
+        val folderMinWidth = 100.dp
+        val folderGridColumnsPref = if (isLandscape) folderGridColumnsLandscape else folderGridColumnsPortrait
+        val folderGridColumns = if (manualGridColumnsEnabled) {
+          folderGridColumnsPref.coerceAtLeast(1)
+        } else {
+          (usableWidth / folderMinWidth).toInt().coerceAtLeast(1)
+        }
+        val isSingleColumn = folderGridColumns == 1
+
+        val horizontalAlignment = if (isSingleColumn) {
+          Alignment.Start
+        } else {
+          if (centerGridTitles) Alignment.CenterHorizontally else Alignment.Start
+        }
+
         // GRID LAYOUT - Vertical arrangement
         Column(
           modifier = Modifier
             .fillMaxWidth()
             .padding(12.dp),
-          horizontalAlignment = if (centerGridTitles) Alignment.CenterHorizontally else Alignment.Start,
+          horizontalAlignment = horizontalAlignment,
         ) {
-          val folderGridColumnsPortrait by browserPreferences.folderGridColumnsPortrait.collectAsState()
-          val folderGridColumnsLandscape by browserPreferences.folderGridColumnsLandscape.collectAsState()
-          val configuration = LocalConfiguration.current
-          val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-          val folderGridColumns = if (isLandscape) folderGridColumnsLandscape else folderGridColumnsPortrait
-          val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
           val horizontalPadding = 32.dp
           val spacing = 8.dp
 
@@ -195,15 +223,21 @@ fun FolderCard(
             ((screenWidthDp - horizontalPadding - totalSpacing) / folderGridColumns).coerceAtLeast(120.dp)
           } else {
             // single column fallback
-            160.dp
+            (screenWidthDp - horizontalPadding).coerceAtLeast(160.dp)
           }
           val aspect = 16f / 9f
           val thumbHeightDp = thumbWidthDp / aspect
 
           Box(
-            modifier = Modifier
-              .width(thumbWidthDp)
-              .height(thumbHeightDp)
+            modifier = (if (isSingleColumn) {
+              Modifier
+                .fillMaxWidth()
+                .aspectRatio(aspect)
+            } else {
+              Modifier
+                .width(thumbWidthDp)
+                .height(thumbHeightDp)
+            })
               .clip(AppShapeScale.medium)
               .background(MaterialTheme.colorScheme.surfaceContainerHigh)
               .combinedClickable(
@@ -212,7 +246,9 @@ fun FolderCard(
               ),
             contentAlignment = Alignment.Center,
           ) {
-            val resolvedThumbnail = thumbnail ?: folderThumbnail?.asImageBitmap()
+            val resolvedThumbnail = if (showFolderThumbnails) {
+              thumbnail ?: folderThumbnail?.asImageBitmap()
+            } else null
             if (resolvedThumbnail != null) {
               androidx.compose.foundation.Image(
                 bitmap = resolvedThumbnail,
@@ -280,11 +316,11 @@ fun FolderCard(
 
           Text(
             folder.name,
-            style = MaterialTheme.typography.titleSmall,
+            style = if (isSingleColumn) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleSmall,
             color = if (isRecentlyPlayed) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface,
             maxLines = maxLines,
             overflow = TextOverflow.Ellipsis,
-            textAlign = if (centerGridTitles) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start,
+            textAlign = if (isSingleColumn) androidx.compose.ui.text.style.TextAlign.Start else (if (centerGridTitles) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start),
           )
 
           if (showTotalVideosChip && folder.videoCount > 0) {

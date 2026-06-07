@@ -1,5 +1,8 @@
 package app.gyrolet.mpvrx.ui.browser.dialogs
 
+import kotlin.math.roundToInt
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -384,10 +387,11 @@ private fun GridColumnsNextSection(
   HorizontalDivider(modifier = Modifier.padding(top = 10.dp))
   DialogSectionTitle(text = "Grid Columns")
 
+  val haptic = LocalHapticFeedback.current
+
   Row(
     modifier = Modifier.fillMaxWidth(),
     horizontalArrangement = Arrangement.spacedBy(16.dp),
-    verticalAlignment = Alignment.Top,
   ) {
     if (folderGridColumnSelector != null) {
       Column(modifier = Modifier.weight(1f)) {
@@ -410,7 +414,13 @@ private fun GridColumnsNextSection(
         }
         Slider(
           value = folderGridColumnSelector.currentValue.toFloat(),
-          onValueChange = { folderGridColumnSelector.onValueChange(it.toInt()) },
+          onValueChange = {
+            val newValue = it.roundToInt()
+            if (newValue != folderGridColumnSelector.currentValue) {
+              folderGridColumnSelector.onValueChange(newValue)
+              haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }
+          },
           valueRange = folderGridColumnSelector.valueRange,
           steps = folderGridColumnSelector.steps,
           modifier = Modifier.fillMaxWidth(),
@@ -439,7 +449,13 @@ private fun GridColumnsNextSection(
         }
         Slider(
           value = videoGridColumnSelector.currentValue.toFloat(),
-          onValueChange = { videoGridColumnSelector.onValueChange(it.toInt()) },
+          onValueChange = {
+            val newValue = it.roundToInt()
+            if (newValue != videoGridColumnSelector.currentValue) {
+              videoGridColumnSelector.onValueChange(newValue)
+              haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }
+          },
           valueRange = videoGridColumnSelector.valueRange,
           steps = videoGridColumnSelector.steps,
           modifier = Modifier.fillMaxWidth(),

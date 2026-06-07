@@ -20,6 +20,9 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.layout.BoxWithConstraints
+import app.gyrolet.mpvrx.ui.utils.calculateResponsiveGridSpans
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -39,6 +42,7 @@ import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -452,19 +456,24 @@ private fun RecentItemsContent(
   val showUnplayedOldVideoLabel by appearancePreferences.showUnplayedOldVideoLabel.collectAsState()
   val unplayedOldVideoDays by appearancePreferences.unplayedOldVideoDays.collectAsState()
   val mediaLayoutMode by browserPreferences.mediaLayoutMode.collectAsState()
-  val folderGridColumnsPortrait by browserPreferences.folderGridColumnsPortrait.collectAsState()
-  val folderGridColumnsLandscape by browserPreferences.folderGridColumnsLandscape.collectAsState()
-  val videoGridColumnsPortrait by browserPreferences.videoGridColumnsPortrait.collectAsState()
-  val videoGridColumnsLandscape by browserPreferences.videoGridColumnsLandscape.collectAsState()
   val showExtensionField by browserPreferences.showExtensionField.collectAsState()
   val showDurationField by browserPreferences.showDurationField.collectAsState()
-
-
+  val manualGridColumnsEnabled by browserPreferences.manualGridColumnsEnabled.collectAsState()
+  val videoGridColumnsPortrait by browserPreferences.videoGridColumnsPortrait.collectAsState()
+  val videoGridColumnsLandscape by browserPreferences.videoGridColumnsLandscape.collectAsState()
   val configuration = androidx.compose.ui.platform.LocalConfiguration.current
   val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-
-  val folderGridColumns = if (isLandscape) folderGridColumnsLandscape else folderGridColumnsPortrait
-  val videoGridColumns = if (isLandscape) videoGridColumnsLandscape else videoGridColumnsPortrait
+  val screenWidthDp = configuration.screenWidthDp.dp
+  val contentHorizontalPadding = 8.dp
+  val itemSpacing = 2.dp
+  val usableWidth = screenWidthDp - (contentHorizontalPadding * 2) - itemSpacing
+  val videoMinWidth = 130.dp
+  val videoGridColumnsPref = if (isLandscape) videoGridColumnsLandscape else videoGridColumnsPortrait
+  val computedVideoColumns = if (manualGridColumnsEnabled) {
+    videoGridColumnsPref.coerceAtLeast(1)
+  } else {
+    (usableWidth / videoMinWidth).toInt().coerceAtLeast(1)
+  }
 
   val isGridMode = mediaLayoutMode == MediaLayoutMode.GRID
 
@@ -472,7 +481,7 @@ private fun RecentItemsContent(
   val isRefreshing = remember { mutableStateOf(false) }
 
   val thumbWidthDp = if (isGridMode) {
-    (360.dp / videoGridColumns)
+    (screenWidthDp / computedVideoColumns)
   } else {
     160.dp
   }
@@ -549,13 +558,17 @@ private fun RecentItemsContent(
   ) {
     if (isGridMode) {
       val navigationBarHeight = app.gyrolet.mpvrx.ui.browser.LocalNavigationBarHeight.current
-      Box(
+      BoxWithConstraints(
         modifier = Modifier
           .fillMaxSize()
           .padding(bottom = navigationBarHeight)
       ) {
+        val spansInfo = calculateResponsiveGridSpans(
+          maxWidth = maxWidth,
+          isGridMode = true
+        )
         LazyVerticalGrid(
-          columns = GridCells.Fixed(videoGridColumns),
+          columns = GridCells.Fixed(spansInfo.spans),
           state = gridState,
           modifier = Modifier.fillMaxSize(),
           contentPadding = PaddingValues(
@@ -574,6 +587,14 @@ private fun RecentItemsContent(
                 is RecentlyPlayedItem.PlaylistItem -> "playlist_${item.playlist.id}_${item.timestamp}"
               }
             },
+            span = { index ->
+              val item = recentItems[index]
+              val itemSpan = when (item) {
+                is RecentlyPlayedItem.PlaylistItem -> spansInfo.folderSpan
+                is RecentlyPlayedItem.VideoItem -> spansInfo.videoSpan
+              }
+              GridItemSpan(itemSpan)
+            }
           ) { index ->
             when (val item = recentItems[index]) {
               is RecentlyPlayedItem.VideoItem -> {
@@ -601,7 +622,7 @@ private fun RecentItemsContent(
                     }
                   },
                   isGridMode = true,
-                  gridColumns = videoGridColumns,
+                  gridColumns = spansInfo.spans,
                   showSubtitleIndicator = showSubtitleIndicator,
                   uiConfig = videoCardUiConfig,
                 )

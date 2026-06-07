@@ -27,6 +27,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.layout.BoxWithConstraints
+import app.gyrolet.mpvrx.ui.utils.calculateResponsiveGridSpans
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -175,7 +183,9 @@ fun FileSystemBrowserScreen(path: String? = null) {
   val showSubtitleIndicator by browserPreferences.showSubtitleIndicator.collectAsState()
 
   // Use standalone local states instead of CompositionLocal to avoid scroll issues with predictive back gesture
+  val mediaLayoutMode by browserPreferences.mediaLayoutMode.collectAsState()
   val listState = remember { LazyListState() }
+  val gridState = rememberLazyGridState()
   
   // UI state
   val isRefreshing = remember { mutableStateOf(false) }
@@ -452,7 +462,7 @@ fun FileSystemBrowserScreen(path: String? = null) {
   // Track scroll for FAB visibility
   app.gyrolet.mpvrx.ui.browser.fab.FabScrollHelper.trackScrollForFabVisibility(
     listState = listState,
-    gridState = null,
+    gridState = if (mediaLayoutMode == app.gyrolet.mpvrx.preferences.MediaLayoutMode.GRID) gridState else null,
     isFabVisible = isFabVisible,
     expanded = isFabExpanded.value,
     onExpandedChange = { isFabExpanded.value = it },
@@ -676,6 +686,7 @@ fun FileSystemBrowserScreen(path: String? = null) {
               // Show search results
               FileSystemSearchContent(
                 listState = listState, // Use the main listState for FAB tracking
+                gridState = gridState,
                 searchQuery = searchQuery,
                 searchResults = searchResults,
                 isLoading = isSearchLoading,
@@ -698,6 +709,7 @@ fun FileSystemBrowserScreen(path: String? = null) {
             } else {
               FileSystemBrowserContent(
                 listState = listState,
+                gridState = gridState,
                 items = items,
                 videoFilesWithPlayback = videoFilesWithPlayback,
                 newVideoIds = newVideoIds,
@@ -1124,6 +1136,7 @@ private fun playVideosAsPlaylist(
 @Composable
 private fun FileSystemBrowserContent(
   listState: LazyListState,
+  gridState: LazyGridState,
   items: List<FileSystemItem>,
   videoFilesWithPlayback: Map<Long, Float>,
   newVideoIds: Set<Long>,
@@ -1281,6 +1294,9 @@ private fun FileSystemBrowserContent(
         label = "scrollbarAlpha",
       )
 
+      val mediaLayoutMode by browserPreferences.mediaLayoutMode.collectAsState()
+      val isGridMode = mediaLayoutMode == app.gyrolet.mpvrx.preferences.MediaLayoutMode.GRID
+
       PullRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
@@ -1290,105 +1306,220 @@ private fun FileSystemBrowserContent(
         Box(
           modifier = Modifier.fillMaxSize()
         ) {
-          LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-              start = 8.dp,
-              end = 8.dp,
-              bottom = navigationBarHeight
-            ),
-          ) {
-            // Breadcrumb navigation (if not at root)
-            if (!isAtRoot && breadcrumbs.isNotEmpty()) {
-              item {
-                app.gyrolet.mpvrx.ui.browser.filesystem.BreadcrumbNavigation(
-                  breadcrumbs = breadcrumbs,
-                  onBreadcrumbClick = onBreadcrumbClick,
+          if (isGridMode) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+              val spansInfo = calculateResponsiveGridSpans(
+                maxWidth = maxWidth,
+                isGridMode = true
+              )
+
+              LazyVerticalGrid(
+                state = gridState,
+                columns = GridCells.Fixed(spansInfo.spans),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                  start = 8.dp,
+                  end = 8.dp,
+                  bottom = navigationBarHeight
+                ),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+              ) {
+                // Breadcrumb navigation (if not at root)
+                if (!isAtRoot && breadcrumbs.isNotEmpty()) {
+                  item(span = { GridItemSpan(maxLineSpan) }) {
+                    app.gyrolet.mpvrx.ui.browser.filesystem.BreadcrumbNavigation(
+                      breadcrumbs = breadcrumbs,
+                      onBreadcrumbClick = onBreadcrumbClick,
+                    )
+                  }
+                }
+
+                // Folders first
+                items(
+                  items = items.filterIsInstance<FileSystemItem.Folder>(),
+                  key = { it.path },
+                  span = { GridItemSpan(spansInfo.folderSpan) }
+                ) { folder ->
+                  val folderModel = app.gyrolet.mpvrx.domain.media.model.VideoFolder(
+                    bucketId = folder.path,
+                    name = folder.name,
+                    path = folder.path,
+                    videoCount = folder.videoCount,
+                    totalSize = folder.totalSize,
+                    totalDuration = folder.totalDuration,
+                    lastModified = folder.lastModified / 1000,
+                  )
+
+                  FolderCard(
+                    folder = folderModel,
+                    isSelected = selectionManager.isSelected(folder),
+                    isRecentlyPlayed = false,
+                    onClick = { onFolderClick(folder) },
+                    onLongClick = { onFolderLongClick(folder) },
+                    onThumbClick = if (tapThumbnailToSelect) {
+                      { selectionManager.toggle(folder) }
+                    } else {
+                      { onFolderClick(folder) }
+                    },
+                    newVideoCount = folder.newCount,
+                    isGridMode = true,
+                  )
+                }
+
+                // Videos second
+                items(
+                  items = items.filterIsInstance<FileSystemItem.VideoFile>(),
+                  key = { "${it.video.id}_${it.video.path}" },
+                  span = { GridItemSpan(spansInfo.videoSpan) }
+                ) { videoFile ->
+                  VideoCard(
+                    video = videoFile.video,
+                    progressPercentage = videoFilesWithPlayback[videoFile.video.id],
+                    isRecentlyPlayed = false,
+                    isSelected = selectionManager.isSelected(videoFile),
+                    onClick = { onVideoClick(videoFile) },
+                    onLongClick = { onVideoLongClick(videoFile) },
+                    onThumbClick = if (tapThumbnailToSelect) {
+                      { selectionManager.toggle(videoFile) }
+                    } else {
+                      { onVideoClick(videoFile) }
+                    },
+                    isOldAndUnplayed = newVideoIds.contains(videoFile.video.id),
+                    isGridMode = true,
+                    showSubtitleIndicator = showSubtitleIndicator,
+                    overrideShowSizeChip = null,
+                    overrideShowResolutionChip = null,
+                    useFolderNameStyle = false,
+                    uiConfig = videoCardUiConfig,
+                  )
+                }
+              }
+
+              if (hasEnoughItems && scrollbarAlpha > 0.01f) {
+                val scrollbarLabels =
+                  remember(items, isAtRoot, breadcrumbs) {
+                    buildList<String?> {
+                      if (!isAtRoot && breadcrumbs.isNotEmpty()) add(null)
+                      items.filterIsInstance<FileSystemItem.Folder>().forEach { add(it.name) }
+                      items.filterIsInstance<FileSystemItem.VideoFile>().forEach { add(it.video.displayName) }
+                    }
+                  }
+
+                ExpressiveScrollBar(
+                  gridState = gridState,
+                  dragLabelProvider = { index ->
+                    fastScrollGlyph(scrollbarLabels.getOrNull(index))
+                  },
+                  modifier =
+                    Modifier
+                      .align(Alignment.CenterEnd)
+                      .padding(end = 2.dp, top = 6.dp, bottom = navigationBarHeight + 6.dp)
+                      .graphicsLayer { alpha = scrollbarAlpha },
+                )
+              }
+            }
+          } else {
+            LazyColumn(
+              state = listState,
+              modifier = Modifier.fillMaxSize(),
+              contentPadding = PaddingValues(
+                start = 8.dp,
+                end = 8.dp,
+                bottom = navigationBarHeight
+              ),
+            ) {
+              // Breadcrumb navigation (if not at root)
+              if (!isAtRoot && breadcrumbs.isNotEmpty()) {
+                item {
+                  app.gyrolet.mpvrx.ui.browser.filesystem.BreadcrumbNavigation(
+                    breadcrumbs = breadcrumbs,
+                    onBreadcrumbClick = onBreadcrumbClick,
+                  )
+                }
+              }
+
+              // Folders first
+              items(
+                items = items.filterIsInstance<FileSystemItem.Folder>(),
+                key = { it.path },
+              ) { folder ->
+                val folderModel = app.gyrolet.mpvrx.domain.media.model.VideoFolder(
+                  bucketId = folder.path,
+                  name = folder.name,
+                  path = folder.path,
+                  videoCount = folder.videoCount,
+                  totalSize = folder.totalSize,
+                  totalDuration = folder.totalDuration,
+                  lastModified = folder.lastModified / 1000,
+                )
+
+                FolderCard(
+                  folder = folderModel,
+                  isSelected = selectionManager.isSelected(folder),
+                  isRecentlyPlayed = false,
+                  onClick = { onFolderClick(folder) },
+                  onLongClick = { onFolderLongClick(folder) },
+                  onThumbClick = if (tapThumbnailToSelect) {
+                    { selectionManager.toggle(folder) }
+                  } else {
+                    { onFolderClick(folder) }
+                  },
+                  newVideoCount = folder.newCount,
+                  isGridMode = false,
+                )
+              }
+
+              // Videos second
+              items(
+                items = items.filterIsInstance<FileSystemItem.VideoFile>(),
+                key = { "${it.video.id}_${it.video.path}" },
+              ) { videoFile ->
+                VideoCard(
+                  video = videoFile.video,
+                  progressPercentage = videoFilesWithPlayback[videoFile.video.id],
+                  isRecentlyPlayed = false,
+                  isSelected = selectionManager.isSelected(videoFile),
+                  onClick = { onVideoClick(videoFile) },
+                  onLongClick = { onVideoLongClick(videoFile) },
+                  onThumbClick = if (tapThumbnailToSelect) {
+                    { selectionManager.toggle(videoFile) }
+                  } else {
+                    { onVideoClick(videoFile) }
+                  },
+                  isOldAndUnplayed = newVideoIds.contains(videoFile.video.id),
+                  isGridMode = false,
+                  showSubtitleIndicator = showSubtitleIndicator,
+                  overrideShowSizeChip = null,
+                  overrideShowResolutionChip = null,
+                  useFolderNameStyle = false,
+                  uiConfig = videoCardUiConfig,
                 )
               }
             }
 
-            // Folders first
-            items(
-              items = items.filterIsInstance<FileSystemItem.Folder>(),
-              key = { it.path },
-            ) { folder ->
-              val folderModel = app.gyrolet.mpvrx.domain.media.model.VideoFolder(
-                bucketId = folder.path,
-                name = folder.name,
-                path = folder.path,
-                videoCount = folder.videoCount,
-                totalSize = folder.totalSize,
-                totalDuration = folder.totalDuration,
-                lastModified = folder.lastModified / 1000,
-              )
-
-              FolderCard(
-                folder = folderModel,
-                isSelected = selectionManager.isSelected(folder),
-                isRecentlyPlayed = false,
-                onClick = { onFolderClick(folder) },
-                onLongClick = { onFolderLongClick(folder) },
-                onThumbClick = if (tapThumbnailToSelect) {
-                  { selectionManager.toggle(folder) }
-                } else {
-                  { onFolderClick(folder) }
-                },
-                newVideoCount = folder.newCount,
-                isGridMode = false,
-              )
-            }
-
-            // Videos second
-            items(
-              items = items.filterIsInstance<FileSystemItem.VideoFile>(),
-              key = { "${it.video.id}_${it.video.path}" },
-            ) { videoFile ->
-              VideoCard(
-                video = videoFile.video,
-                progressPercentage = videoFilesWithPlayback[videoFile.video.id],
-                isRecentlyPlayed = false,
-                isSelected = selectionManager.isSelected(videoFile),
-                onClick = { onVideoClick(videoFile) },
-                onLongClick = { onVideoLongClick(videoFile) },
-                onThumbClick = if (tapThumbnailToSelect) {
-                  { selectionManager.toggle(videoFile) }
-                } else {
-                  { onVideoClick(videoFile) }
-                },
-                isOldAndUnplayed = newVideoIds.contains(videoFile.video.id),
-                isGridMode = false,
-                showSubtitleIndicator = showSubtitleIndicator,
-                overrideShowSizeChip = null,
-                overrideShowResolutionChip = null,
-                useFolderNameStyle = false,
-                uiConfig = videoCardUiConfig,
-              )
-            }
-          }
-          
-          if (hasEnoughItems && scrollbarAlpha > 0.01f) {
-            val scrollbarLabels =
-              remember(items, isAtRoot, breadcrumbs) {
-                buildList<String?> {
-                  if (!isAtRoot && breadcrumbs.isNotEmpty()) add(null)
-                  items.filterIsInstance<FileSystemItem.Folder>().forEach { add(it.name) }
-                  items.filterIsInstance<FileSystemItem.VideoFile>().forEach { add(it.video.displayName) }
+            if (hasEnoughItems && scrollbarAlpha > 0.01f) {
+              val scrollbarLabels =
+                remember(items, isAtRoot, breadcrumbs) {
+                  buildList<String?> {
+                    if (!isAtRoot && breadcrumbs.isNotEmpty()) add(null)
+                    items.filterIsInstance<FileSystemItem.Folder>().forEach { add(it.name) }
+                    items.filterIsInstance<FileSystemItem.VideoFile>().forEach { add(it.video.displayName) }
+                  }
                 }
-              }
 
-            ExpressiveScrollBar(
-              listState = listState,
-              dragLabelProvider = { index ->
-                fastScrollGlyph(scrollbarLabels.getOrNull(index))
-              },
-              modifier =
-                Modifier
-                  .align(Alignment.CenterEnd)
-                  .padding(end = 2.dp, top = 6.dp, bottom = navigationBarHeight + 6.dp)
-                  .graphicsLayer { alpha = scrollbarAlpha },
-            )
+              ExpressiveScrollBar(
+                listState = listState,
+                dragLabelProvider = { index ->
+                  fastScrollGlyph(scrollbarLabels.getOrNull(index))
+                },
+                modifier =
+                  Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 2.dp, top = 6.dp, bottom = navigationBarHeight + 6.dp)
+                    .graphicsLayer { alpha = scrollbarAlpha },
+              )
+            }
           }
         }
       }
@@ -1399,6 +1530,7 @@ private fun FileSystemBrowserContent(
 @Composable
 private fun FileSystemSearchContent(
   listState: LazyListState,
+  gridState: LazyGridState,
   searchQuery: String,
   searchResults: List<FileSystemItem>,
   isLoading: Boolean,
@@ -1456,13 +1588,19 @@ private fun FileSystemSearchContent(
       )
     }
 
+  val mediaLayoutMode by browserPreferences.mediaLayoutMode.collectAsState()
+  val isGridMode = mediaLayoutMode == app.gyrolet.mpvrx.preferences.MediaLayoutMode.GRID
+
   // Track scroll for FAB visibility in search mode with proper scroll direction detection
   val previousIndex = remember { mutableIntStateOf(0) }
   val previousOffset = remember { mutableIntStateOf(0) }
+
+  val firstVisibleItemIndex = if (isGridMode) gridState.firstVisibleItemIndex else listState.firstVisibleItemIndex
+  val firstVisibleItemScrollOffset = if (isGridMode) gridState.firstVisibleItemScrollOffset else listState.firstVisibleItemScrollOffset
   
-  LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
-    val currentIndex = listState.firstVisibleItemIndex
-    val currentOffset = listState.firstVisibleItemScrollOffset
+  LaunchedEffect(firstVisibleItemIndex, firstVisibleItemScrollOffset) {
+    val currentIndex = firstVisibleItemIndex
+    val currentOffset = firstVisibleItemScrollOffset
     
     // Show FAB when at the top
     if (currentIndex == 0 && currentOffset == 0) {
@@ -1526,91 +1664,191 @@ private fun FileSystemSearchContent(
         Box(
           modifier = Modifier.fillMaxSize()
         ) {
-          // Content extends full height for transparency
-          LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-              start = 8.dp,
-              end = 8.dp,
-              top = 12.dp,
-              bottom = navigationBarHeight
-            ),
-          ) {
-            // Separate folders and videos for proper ordering and deduplicate
-            val folders = searchResults.filterIsInstance<FileSystemItem.Folder>().distinctBy { it.path }
-            val videos = searchResults.filterIsInstance<FileSystemItem.VideoFile>().distinctBy { it.video.id }
-            
-            // Folders first
-            items(
-              items = folders,
-              key = { "search_folder_${it.path}_${it.hashCode()}" },
-            ) { folder ->
-              val folderModel = app.gyrolet.mpvrx.domain.media.model.VideoFolder(
-                bucketId = folder.path,
-                name = folder.name,
-                path = folder.path,
-                videoCount = folder.videoCount,
-                totalSize = folder.totalSize,
-                totalDuration = folder.totalDuration,
-                lastModified = folder.lastModified / 1000,
+          if (isGridMode) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+              val spansInfo = calculateResponsiveGridSpans(
+                maxWidth = maxWidth,
+                isGridMode = true
               )
 
-              FolderCard(
-                folder = folderModel,
-                isSelected = false,
-                isRecentlyPlayed = false,
-                onClick = { onFolderClick(folder) },
-                onLongClick = { },
-                onThumbClick = { onFolderClick(folder) },
-                newVideoCount = folder.newCount,
-                isGridMode = false,
-              )
-            }
-            
-            // Videos second
-            items(
-              items = videos,
-              key = { "search_video_${it.video.id}_${it.video.path}_${it.hashCode()}" },
-            ) { videoFile ->
-              VideoCard(
-                video = videoFile.video,
-                progressPercentage = videoFilesWithPlayback[videoFile.video.id],
-                isRecentlyPlayed = false,
-                isSelected = false,
-                onClick = { onVideoClick(videoFile.video) },
-                onLongClick = { },
-                onThumbClick = { onVideoClick(videoFile.video) },
-                isOldAndUnplayed = newVideoIds.contains(videoFile.video.id),
-                isGridMode = false,
-                showSubtitleIndicator = showSubtitleIndicator,
-                overrideShowSizeChip = null,
-                overrideShowResolutionChip = null,
-                useFolderNameStyle = false,
-                uiConfig = videoCardUiConfig,
-              )
-            }
-          }
-          
-          if (searchResults.size > 20) {
-            val scrollbarLabels =
-              remember(searchResults) {
-                buildList<String?> {
-                  searchResults.filterIsInstance<FileSystemItem.Folder>().forEach { add(it.name) }
-                  searchResults.filterIsInstance<FileSystemItem.VideoFile>().forEach { add(it.video.displayName) }
+              LazyVerticalGrid(
+                state = gridState,
+                columns = GridCells.Fixed(spansInfo.spans),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                  start = 8.dp,
+                  end = 8.dp,
+                  top = 12.dp,
+                  bottom = navigationBarHeight
+                ),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+              ) {
+                // Separate folders and videos for proper ordering and deduplicate
+                val folders = searchResults.filterIsInstance<FileSystemItem.Folder>().distinctBy { it.path }
+                val videos = searchResults.filterIsInstance<FileSystemItem.VideoFile>().distinctBy { it.video.id }
+
+                // Folders first
+                items(
+                  items = folders,
+                  key = { "search_folder_${it.path}_${it.hashCode()}" },
+                  span = { GridItemSpan(spansInfo.folderSpan) }
+                ) { folder ->
+                  val folderModel = app.gyrolet.mpvrx.domain.media.model.VideoFolder(
+                    bucketId = folder.path,
+                    name = folder.name,
+                    path = folder.path,
+                    videoCount = folder.videoCount,
+                    totalSize = folder.totalSize,
+                    totalDuration = folder.totalDuration,
+                    lastModified = folder.lastModified / 1000,
+                  )
+
+                  FolderCard(
+                    folder = folderModel,
+                    isSelected = false,
+                    isRecentlyPlayed = false,
+                    onClick = { onFolderClick(folder) },
+                    onLongClick = { },
+                    onThumbClick = { onFolderClick(folder) },
+                    newVideoCount = folder.newCount,
+                    isGridMode = true,
+                  )
+                }
+
+                // Videos second
+                items(
+                  items = videos,
+                  key = { "search_video_${it.video.id}_${it.video.path}_${it.hashCode()}" },
+                  span = { GridItemSpan(spansInfo.videoSpan) }
+                ) { videoFile ->
+                  VideoCard(
+                    video = videoFile.video,
+                    progressPercentage = videoFilesWithPlayback[videoFile.video.id],
+                    isRecentlyPlayed = false,
+                    isSelected = false,
+                    onClick = { onVideoClick(videoFile.video) },
+                    onLongClick = { },
+                    onThumbClick = { onVideoClick(videoFile.video) },
+                    isOldAndUnplayed = newVideoIds.contains(videoFile.video.id),
+                    isGridMode = true,
+                    showSubtitleIndicator = showSubtitleIndicator,
+                    overrideShowSizeChip = null,
+                    overrideShowResolutionChip = null,
+                    useFolderNameStyle = false,
+                    uiConfig = videoCardUiConfig,
+                  )
                 }
               }
 
-            ExpressiveScrollBar(
-              listState = listState,
-              dragLabelProvider = { index ->
-                fastScrollGlyph(scrollbarLabels.getOrNull(index))
-              },
-              modifier =
-                Modifier
-                  .align(Alignment.CenterEnd)
-                  .padding(end = 2.dp, top = 6.dp, bottom = navigationBarHeight + 6.dp),
-            )
+              if (searchResults.size > 20) {
+                val scrollbarLabels =
+                  remember(searchResults) {
+                    buildList<String?> {
+                      searchResults.filterIsInstance<FileSystemItem.Folder>().forEach { add(it.name) }
+                      searchResults.filterIsInstance<FileSystemItem.VideoFile>().forEach { add(it.video.displayName) }
+                    }
+                  }
+
+                ExpressiveScrollBar(
+                  gridState = gridState,
+                  dragLabelProvider = { index ->
+                    fastScrollGlyph(scrollbarLabels.getOrNull(index))
+                  },
+                  modifier =
+                    Modifier
+                      .align(Alignment.CenterEnd)
+                      .padding(end = 2.dp, top = 6.dp, bottom = navigationBarHeight + 6.dp),
+                )
+              }
+            }
+          } else {
+            // Content extends full height for transparency
+            LazyColumn(
+              state = listState,
+              modifier = Modifier.fillMaxSize(),
+              contentPadding = PaddingValues(
+                start = 8.dp,
+                end = 8.dp,
+                top = 12.dp,
+                bottom = navigationBarHeight
+              ),
+            ) {
+              // Separate folders and videos for proper ordering and deduplicate
+              val folders = searchResults.filterIsInstance<FileSystemItem.Folder>().distinctBy { it.path }
+              val videos = searchResults.filterIsInstance<FileSystemItem.VideoFile>().distinctBy { it.video.id }
+              
+              // Folders first
+              items(
+                items = folders,
+                key = { "search_folder_${it.path}_${it.hashCode()}" },
+              ) { folder ->
+                val folderModel = app.gyrolet.mpvrx.domain.media.model.VideoFolder(
+                  bucketId = folder.path,
+                  name = folder.name,
+                  path = folder.path,
+                  videoCount = folder.videoCount,
+                  totalSize = folder.totalSize,
+                  totalDuration = folder.totalDuration,
+                  lastModified = folder.lastModified / 1000,
+                )
+
+                FolderCard(
+                  folder = folderModel,
+                  isSelected = false,
+                  isRecentlyPlayed = false,
+                  onClick = { onFolderClick(folder) },
+                  onLongClick = { },
+                  onThumbClick = { onFolderClick(folder) },
+                  newVideoCount = folder.newCount,
+                  isGridMode = false,
+                )
+              }
+              
+              // Videos second
+              items(
+                items = videos,
+                key = { "search_video_${it.video.id}_${it.video.path}_${it.hashCode()}" },
+              ) { videoFile ->
+                VideoCard(
+                  video = videoFile.video,
+                  progressPercentage = videoFilesWithPlayback[videoFile.video.id],
+                  isRecentlyPlayed = false,
+                  isSelected = false,
+                  onClick = { onVideoClick(videoFile.video) },
+                  onLongClick = { },
+                  onThumbClick = { onVideoClick(videoFile.video) },
+                  isOldAndUnplayed = newVideoIds.contains(videoFile.video.id),
+                  isGridMode = false,
+                  showSubtitleIndicator = showSubtitleIndicator,
+                  overrideShowSizeChip = null,
+                  overrideShowResolutionChip = null,
+                  useFolderNameStyle = false,
+                  uiConfig = videoCardUiConfig,
+                )
+              }
+            }
+            
+            if (searchResults.size > 20) {
+              val scrollbarLabels =
+                remember(searchResults) {
+                  buildList<String?> {
+                    searchResults.filterIsInstance<FileSystemItem.Folder>().forEach { add(it.name) }
+                    searchResults.filterIsInstance<FileSystemItem.VideoFile>().forEach { add(it.video.displayName) }
+                  }
+                }
+
+              ExpressiveScrollBar(
+                listState = listState,
+                dragLabelProvider = { index ->
+                  fastScrollGlyph(scrollbarLabels.getOrNull(index))
+                },
+                modifier =
+                  Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 2.dp, top = 6.dp, bottom = navigationBarHeight + 6.dp),
+              )
+            }
           }
         }
       }

@@ -2,6 +2,12 @@ package app.gyrolet.mpvrx.preferences
 
 import app.gyrolet.mpvrx.preferences.preference.PreferenceStore
 import app.gyrolet.mpvrx.preferences.preference.getEnum
+import app.gyrolet.mpvrx.preferences.preference.Preference
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 
 /**
  * Preferences for the video browser (folder and video lists)
@@ -21,11 +27,19 @@ class BrowserPreferences(
   val folderViewMode = preferenceStore.getEnum("folder_view_mode", FolderViewMode.AlbumView)
 
   private val isTablet = context.resources.configuration.smallestScreenWidthDp >= 600
-  val folderGridColumnsPortrait = preferenceStore.getInt("folder_grid_columns_portrait", if (isTablet) 4 else 3)
-  val folderGridColumnsLandscape = preferenceStore.getInt("folder_grid_columns_landscape", 5)
+  val maxColumns = if (isTablet) 8 else 4
 
-  val videoGridColumnsPortrait = preferenceStore.getInt("video_grid_columns_portrait", if (isTablet) 4 else 2)
-  val videoGridColumnsLandscape = preferenceStore.getInt("video_grid_columns_landscape", 4)
+  private val _folderGridColumnsPortrait = preferenceStore.getInt("folder_grid_columns_portrait", if (isTablet) 4 else 3)
+  private val _folderGridColumnsLandscape = preferenceStore.getInt("folder_grid_columns_landscape", 5)
+
+  private val _videoGridColumnsPortrait = preferenceStore.getInt("video_grid_columns_portrait", if (isTablet) 4 else 2)
+  private val _videoGridColumnsLandscape = preferenceStore.getInt("video_grid_columns_landscape", 4)
+
+  val folderGridColumnsPortrait: Preference<Int> = CoercedPreference(_folderGridColumnsPortrait, maxColumns)
+  val folderGridColumnsLandscape: Preference<Int> = CoercedPreference(_folderGridColumnsLandscape, 8)
+
+  val videoGridColumnsPortrait: Preference<Int> = CoercedPreference(_videoGridColumnsPortrait, maxColumns)
+  val videoGridColumnsLandscape: Preference<Int> = CoercedPreference(_videoGridColumnsLandscape, 8)
 
   val showExtensionField = preferenceStore.getBoolean("show_extension_field", false)
   val showDurationField = preferenceStore.getBoolean("show_duration_field", true)
@@ -42,6 +56,7 @@ class BrowserPreferences(
   val showProgressBar = preferenceStore.getBoolean("show_progress_bar", true)
   val centerGridTitles = preferenceStore.getBoolean("center_grid_titles", true)
   val mediaLayoutMode = preferenceStore.getEnum("media_layout_mode", MediaLayoutMode.LIST)
+  val manualGridColumnsEnabled = preferenceStore.getBoolean("manual_grid_columns_enabled", false)
 
   // Visibility preferences for folder card chips
   val showTotalVideosChip = preferenceStore.getBoolean("show_total_videos_chip", true)
@@ -156,4 +171,22 @@ enum class ThumbnailMode {
         FrameAtPosition -> "Frame position"
         EmbeddedThumbnail -> "Embedded thumbnail"
       }
+}
+
+internal class CoercedPreference(
+  private val delegate: Preference<Int>,
+  private val maxVal: Int,
+) : Preference<Int> {
+  override fun key(): String = delegate.key()
+  override fun get(): Int = delegate.get().coerceIn(1, maxVal)
+  override fun set(value: Int) = delegate.set(value.coerceIn(1, maxVal))
+  override fun isSet(): Boolean = delegate.isSet()
+  override fun delete() = delegate.delete()
+  override fun defaultValue(): Int = delegate.defaultValue().coerceIn(1, maxVal)
+
+  override fun changes(): Flow<Int> =
+    delegate.changes().map { it.coerceIn(1, maxVal) }
+
+  override fun stateIn(scope: kotlinx.coroutines.CoroutineScope): StateFlow<Int> =
+    changes().stateIn(scope, SharingStarted.Eagerly, get())
 }

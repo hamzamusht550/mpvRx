@@ -21,6 +21,9 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.layout.BoxWithConstraints
+import app.gyrolet.mpvrx.ui.utils.calculateResponsiveGridSpans
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,6 +52,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -162,11 +166,6 @@ object FolderListScreen : Screen {
 
     // Preferences
     val mediaLayoutMode by browserPreferences.mediaLayoutMode.collectAsState()
-    val folderGridColumnsPortrait by browserPreferences.folderGridColumnsPortrait.collectAsState()
-  val folderGridColumnsLandscape by browserPreferences.folderGridColumnsLandscape.collectAsState()
-  val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-  val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-  val folderGridColumns = if (isLandscape) folderGridColumnsLandscape else folderGridColumnsPortrait
     val showSubtitleIndicator by browserPreferences.showSubtitleIndicator.collectAsState()
     val folderSortType by browserPreferences.folderSortType.collectAsState()
     val folderSortOrder by browserPreferences.folderSortOrder.collectAsState()
@@ -606,7 +605,6 @@ object FolderListScreen : Screen {
                       MediaUtils.playFile(video, context)
                     },
                     mediaLayoutMode = mediaLayoutMode,
-                    folderGridColumns = folderGridColumns,
                   )
                 }
               }
@@ -621,7 +619,6 @@ object FolderListScreen : Screen {
                 hasCompletedInitialLoad = hasCompletedInitialLoad,
                 foldersWereDeleted = foldersWereDeleted,
                 mediaLayoutMode = mediaLayoutMode,
-                folderGridColumns = folderGridColumns,
                 tapThumbnailToSelect = tapThumbnailToSelect,
                 navigationBarHeight = navigationBarHeight,
                 listState = listState,
@@ -839,7 +836,6 @@ private fun FolderListContent(
   hasCompletedInitialLoad: Boolean,
   foldersWereDeleted: Boolean,
   mediaLayoutMode: MediaLayoutMode,
-  folderGridColumns: Int,
   tapThumbnailToSelect: Boolean,
   navigationBarHeight: androidx.compose.ui.unit.Dp,
   listState: LazyListState,
@@ -897,7 +893,6 @@ private fun FolderListContent(
           foldersWithNewCount = foldersWithNewCount,
           pinnedFolderPaths = pinnedFolderPaths,
           recentlyPlayedFilePath = recentlyPlayedFilePath,
-          folderGridColumns = folderGridColumns,
           tapThumbnailToSelect = tapThumbnailToSelect,
           navigationBarHeight = navigationBarHeight,
           gridState = gridState,
@@ -933,7 +928,6 @@ private fun GridContent(
   foldersWithNewCount: List<app.gyrolet.mpvrx.ui.browser.folderlist.FolderWithNewCount>,
   pinnedFolderPaths: Set<String>,
   recentlyPlayedFilePath: String?,
-  folderGridColumns: Int,
   tapThumbnailToSelect: Boolean,
   navigationBarHeight: androidx.compose.ui.unit.Dp,
   gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
@@ -943,9 +937,28 @@ private fun GridContent(
   onFolderLongClick: (VideoFolder) -> Unit,
   onTogglePin: (VideoFolder) -> Unit,
 ) {
-  Box(modifier = Modifier.fillMaxSize()) {
+  BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    val browserPreferences = org.koin.compose.koinInject<app.gyrolet.mpvrx.preferences.BrowserPreferences>()
+    val manualGridColumnsEnabled by browserPreferences.manualGridColumnsEnabled.collectAsState()
+    val folderGridColumnsPortrait by browserPreferences.folderGridColumnsPortrait.collectAsState()
+    val folderGridColumnsLandscape by browserPreferences.folderGridColumnsLandscape.collectAsState()
+
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val folderGridColumnsPref = if (isLandscape) folderGridColumnsLandscape else folderGridColumnsPortrait
+
+    val computedColumns = if (manualGridColumnsEnabled) {
+      folderGridColumnsPref.coerceAtLeast(1)
+    } else {
+      val contentHorizontalPadding = 8.dp
+      val itemSpacing = 2.dp
+      val usableWidth = maxWidth - (contentHorizontalPadding * 2) - itemSpacing
+      val folderMinWidth = 100.dp
+      (usableWidth / folderMinWidth).toInt().coerceAtLeast(1)
+    }
+
     LazyVerticalGrid(
-      columns = GridCells.Fixed(folderGridColumns),
+      columns = GridCells.Fixed(computedColumns),
       state = gridState,
       modifier = Modifier.fillMaxSize(),
       contentPadding = PaddingValues(
@@ -1115,7 +1128,6 @@ private fun SearchResultsContent(
   onFolderClick: (app.gyrolet.mpvrx.domain.media.model.VideoFolder) -> Unit,
   onVideoClick: (app.gyrolet.mpvrx.domain.media.model.Video) -> Unit,
   mediaLayoutMode: app.gyrolet.mpvrx.preferences.MediaLayoutMode,
-  folderGridColumns: Int,
 ) {
   val folders = searchResults.filterIsInstance<FileSystemItem.Folder>().map { folder ->
     app.gyrolet.mpvrx.domain.media.model.VideoFolder(
@@ -1176,44 +1188,58 @@ private fun SearchResultsContent(
   
   Box(modifier = Modifier.fillMaxSize()) {
     if (isGridMode) {
-      LazyVerticalGrid(
-        columns = GridCells.Fixed(folderGridColumns),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-          start = 8.dp,
-          end = 8.dp,
-          top = 8.dp,
-          bottom = navigationBarHeight + 8.dp
-        ),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-      ) {
-        items(count = folders.size, key = { index -> folders[index].bucketId }) { index ->
-          val folder = folders[index]
-          FolderCard(
-            folder = folder,
-            isSelected = false,
-            isRecentlyPlayed = false,
-            onClick = { onFolderClick(folder) },
-            onLongClick = {},
-            onThumbClick = { onFolderClick(folder) },
-            newVideoCount = 0,
-            isGridMode = true,
-          )
-        }
-        
-        items(count = videos.size, key = { index -> videos[index].id }) { index ->
-          val video = videos[index]
-          VideoCard(
-            video = video,
-            isSelected = false,
-            onClick = { onVideoClick(video) },
-            onLongClick = {},
-            onThumbClick = { onVideoClick(video) },
-            isGridMode = true,
-            showSubtitleIndicator = showSubtitleIndicator,
-            uiConfig = videoCardUiConfig,
-          )
+      BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val spansInfo = calculateResponsiveGridSpans(
+          maxWidth = maxWidth,
+          isGridMode = true
+        )
+        LazyVerticalGrid(
+          columns = GridCells.Fixed(spansInfo.spans),
+          modifier = Modifier.fillMaxSize(),
+          contentPadding = PaddingValues(
+            start = 8.dp,
+            end = 8.dp,
+            top = 8.dp,
+            bottom = navigationBarHeight + 8.dp
+          ),
+          horizontalArrangement = Arrangement.spacedBy(4.dp),
+          verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+          items(
+            count = folders.size,
+            key = { index -> folders[index].bucketId },
+            span = { GridItemSpan(spansInfo.folderSpan) }
+          ) { index ->
+            val folder = folders[index]
+            FolderCard(
+              folder = folder,
+              isSelected = false,
+              isRecentlyPlayed = false,
+              onClick = { onFolderClick(folder) },
+              onLongClick = {},
+              onThumbClick = { onFolderClick(folder) },
+              newVideoCount = 0,
+              isGridMode = true,
+            )
+          }
+          
+          items(
+            count = videos.size,
+            key = { index -> videos[index].id },
+            span = { GridItemSpan(spansInfo.videoSpan) }
+          ) { index ->
+            val video = videos[index]
+            VideoCard(
+              video = video,
+              isSelected = false,
+              onClick = { onVideoClick(video) },
+              onLongClick = {},
+              onThumbClick = { onVideoClick(video) },
+              isGridMode = true,
+              showSubtitleIndicator = showSubtitleIndicator,
+              uiConfig = videoCardUiConfig,
+            )
+          }
         }
       }
     } else {
