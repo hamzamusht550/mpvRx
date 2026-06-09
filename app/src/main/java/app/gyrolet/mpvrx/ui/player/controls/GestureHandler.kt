@@ -1073,6 +1073,7 @@ fun GestureHandler(
                   // Only activate if this is clearly a horizontal gesture
                   // and not conflicting with other gestures
                   if (gestureType == null && 
+                      !isSubtitleTouch &&
                       abs(deltaX) > 30f && 
                       abs(deltaX) > abs(deltaY) * 2f && // Must be strongly horizontal
                       timeSinceStart > 100L && // Avoid conflicts with double-tap
