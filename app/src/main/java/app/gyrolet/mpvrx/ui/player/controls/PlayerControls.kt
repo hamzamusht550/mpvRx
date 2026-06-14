@@ -83,6 +83,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -340,7 +341,7 @@ fun PlayerControls(
   DoubleTapToSeekOvals(doubleTapSeekAmount, seekText, showDoubleTapOvals, showSeekTime, showSeekTime, interactionSource)
 
   Box(
-    modifier = modifier.fillMaxSize(),
+    modifier = modifier.fillMaxSize().clipToBounds(),
   ) {
     VideoOpenAnimationOverlay(
       style = videoOpenAnim,
@@ -1054,7 +1055,7 @@ fun PlayerControls(
         }
 
         AnimatedVisibility(
-          visible = controlsShown && !areControlsLocked,
+          visible = controlsShown && !areControlsLocked && !areSlidersShown,
           enter = fadeIn(playerControlsEnterAnimationSpec()),
           exit = fadeOut(playerControlsExitAnimationSpec()),
           modifier =
@@ -1292,7 +1293,7 @@ fun PlayerControls(
         }
 
         AnimatedVisibility(
-          visible = (controlsShown || seekBarShown) && !areControlsLocked,
+          visible = (controlsShown || (!isPortrait && seekBarShown)) && !areControlsLocked,
           enter = buildControlsEnterV(controlsAnimStyle, reduceMotion, enterMs) { it },
           exit  = buildControlsExitV(controlsAnimStyle, reduceMotion, exitMs) { it },
           modifier =

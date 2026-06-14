@@ -561,22 +561,15 @@ class PlayerActivity :
         isReady = false
         viewModel.onVideoLoadStarted()
         val originalUri = extractUriFromIntent(intent)
-        val originalUriStr = originalUri?.toString().orEmpty().lowercase()
-        val fileNameLower = fileName.lowercase()
-        val isM3u = playlistId == null && playlist.isEmpty() && (
-          playableUri.lowercase().endsWith(".m3u") ||
-          playableUri.lowercase().endsWith(".m3u8") ||
-          playableUri.lowercase().contains(".m3u?") ||
-          playableUri.lowercase().contains(".m3u8?") ||
-          originalUriStr.endsWith(".m3u") ||
-          originalUriStr.endsWith(".m3u8") ||
-          originalUriStr.contains(".m3u?") ||
-          originalUriStr.contains(".m3u8?") ||
-          fileNameLower.endsWith(".m3u") ||
-          fileNameLower.endsWith(".m3u8") ||
-          (intent.type?.lowercase()?.contains("mpegurl") == true)
+        val shouldExpandM3u = M3uPlaybackPolicy.shouldExpandInApp(
+          playableUri = playableUri,
+          originalUri = originalUri?.toString(),
+          fileName = fileName,
+          mimeType = intent.type,
+          hasExistingPlaylist = playlist.isNotEmpty(),
+          hasPlaylistId = playlistId != null,
         )
-        if (isM3u) {
+        if (shouldExpandM3u) {
           lifecycleScope.launch(Dispatchers.Main) {
             val success = loadDynamicM3uPlaylist(originalUri?.toString() ?: playableUri)
             if (success) {
@@ -929,6 +922,7 @@ class PlayerActivity :
     if (!mpvInitialized) return
 
     player.isExiting = true
+    mpvInitialized = false
     intentSubtitleJob?.cancel()
     videoParamRefreshJob?.cancel()
     backgroundServiceSyncJob?.cancel()
@@ -949,11 +943,20 @@ class PlayerActivity :
         MPVLib.setPropertyBoolean("pause", true)
         MPVLib.command("quit")
       }
-
-      MPVLib.destroy()
-      mpvInitialized = false
     }.onFailure { e ->
-      Log.e(TAG, "Error cleaning up MPV", e)
+      Log.e(TAG, "Error quitting MPV", e)
+    }
+    destroyMpvAfterCommandDrain("player cleanup")
+  }
+
+  private fun destroyMpvAfterCommandDrain(reason: String) {
+    // mpv's quit command is asynchronous. Destroying the core immediately can abort
+    // inside libmpv's dispatch queue while stream/subtitle work is still unwinding.
+    android.os.SystemClock.sleep(MPV_DESTROY_DRAIN_DELAY_MS)
+    runCatching {
+      MPVLib.destroy()
+    }.onFailure { e ->
+      Log.e(TAG, "Error destroying MPV after $reason", e)
     }
   }
 
@@ -1334,11 +1337,7 @@ class PlayerActivity :
     }.onFailure { e ->
       Log.e(TAG, "Error quitting detached MPV session", e)
     }
-    runCatching {
-      MPVLib.destroy()
-    }.onFailure { e ->
-      Log.e(TAG, "Error destroying detached MPV session", e)
-    }
+    destroyMpvAfterCommandDrain("detached background session")
   }
 
   private fun isNotificationReentryIntent(intent: Intent?): Boolean =
@@ -1914,19 +1913,27 @@ class PlayerActivity :
   private fun addSubtitlesFromExtras(extras: Bundle) {
     if (!extras.containsKey("subs")) return
 
-    val subList = Utils.getParcelableArray<Uri>(extras, "subs")
-    val subsToEnable = Utils.getParcelableArray<Uri>(extras, "subs.enable")
+    val subList = Utils.getParcelableArray<Uri>(extras, "subs")?.toList().orEmpty()
+    val subsToEnable = Utils.getParcelableArray<Uri>(extras, "subs.enable")?.toList().orEmpty()
+    val hasSubsToEnable = extras.containsKey("subs.enable")
     val subtitleTitles = extras.getStringArray("subs.titles").orEmpty()
     val subtitleLanguages = extras.getStringArray("subs.langs").orEmpty()
+    val subtitleEntries =
+      IntentSubtitleLoadPolicy.entriesToLoad(
+        subtitles = subList,
+        enabledSubtitles = subsToEnable,
+        hasEnabledSubtitleExtra = hasSubsToEnable,
+      )
 
     intentSubtitleJob?.cancel()
     intentSubtitleJob = lifecycleScope.launch(Dispatchers.IO) {
-      for ((index, suburi) in subList.withIndex()) {
+      for (entry in subtitleEntries) {
         if (!isActive || !canIssueMpvCommands()) break
+        val suburi = entry.value
         val subfile = suburi.resolveUri(this@PlayerActivity) ?: continue
-        val flag = if (subsToEnable.any { it == suburi }) "select" else "auto"
-        val title = subtitleTitles.getOrNull(index)?.trim().orEmpty().ifBlank { null }
-        val language = subtitleLanguages.getOrNull(index)?.trim().orEmpty().ifBlank { null }
+        val flag = if (entry.select) "select" else "auto"
+        val title = subtitleTitles.getOrNull(entry.metadataIndex)?.trim().orEmpty().ifBlank { null }
+        val language = subtitleLanguages.getOrNull(entry.metadataIndex)?.trim().orEmpty().ifBlank { null }
         val displayTitle = title ?: language
 
         withContext(Dispatchers.Main.immediate) {
@@ -3379,22 +3386,15 @@ class PlayerActivity :
       isReady = false
       viewModel.onVideoLoadStarted()
       val originalUri = extractUriFromIntent(intent)
-      val originalUriStr = originalUri?.toString().orEmpty().lowercase()
-      val fileNameLower = fileName.lowercase()
-      val isM3u = playlistId == null && playlist.isEmpty() && (
-        uri.lowercase().endsWith(".m3u") ||
-        uri.lowercase().endsWith(".m3u8") ||
-        uri.lowercase().contains(".m3u?") ||
-        uri.lowercase().contains(".m3u8?") ||
-        originalUriStr.endsWith(".m3u") ||
-        originalUriStr.endsWith(".m3u8") ||
-        originalUriStr.contains(".m3u?") ||
-        originalUriStr.contains(".m3u8?") ||
-        fileNameLower.endsWith(".m3u") ||
-        fileNameLower.endsWith(".m3u8") ||
-        (intent.type?.lowercase()?.contains("mpegurl") == true)
+      val shouldExpandM3u = M3uPlaybackPolicy.shouldExpandInApp(
+        playableUri = uri,
+        originalUri = originalUri?.toString(),
+        fileName = fileName,
+        mimeType = intent.type,
+        hasExistingPlaylist = playlist.isNotEmpty(),
+        hasPlaylistId = playlistId != null,
       )
-      if (isM3u) {
+      if (shouldExpandM3u) {
         lifecycleScope.launch(Dispatchers.Main) {
           val success = loadDynamicM3uPlaylist(originalUri?.toString() ?: uri)
           if (success) {
@@ -4878,6 +4878,11 @@ class PlayerActivity :
      * Milliseconds-to-seconds conversion factor.
      */
     private const val MILLISECONDS_TO_SECONDS = 1000
+
+    /**
+     * Briefly lets mpv drain asynchronous quit/stream work before destroying the native core.
+     */
+    private const val MPV_DESTROY_DRAIN_DELAY_MS = 200L
 
     /**
      * Factor to divide subtitle and audio delays to convert from ms to seconds.

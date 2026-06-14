@@ -19,20 +19,6 @@ object SubtitleOps : KoinComponent {
   private const val TAG = "SubtitleOps"
   private val networkRepository: NetworkRepository by inject()
 
-  private fun shouldSkipNetworkSubtitleAutoload(videoFilePath: String, videoFileName: String): Boolean {
-    val p = videoFilePath.lowercase(Locale.getDefault())
-    val n = videoFileName.lowercase(Locale.getDefault())
-
-    val looksLikePlaylist =
-      p.endsWith(".m3u") || p.endsWith(".m3u8") ||
-        p.contains(".m3u?") || p.contains(".m3u8?") ||
-        n.endsWith(".m3u") || n.endsWith(".m3u8")
-
-    val genericName = n.isBlank() || n == "network stream"
-
-    return looksLikePlaylist || genericName
-  }
-
   suspend fun autoloadSubtitles(
     videoFilePath: String,
     videoFileName: String,
@@ -56,12 +42,8 @@ object SubtitleOps : KoinComponent {
       val isNetworkStream = videoFilePath.matches(Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://.*"))
 
       if (isNetworkStream) {
-        if (shouldSkipNetworkSubtitleAutoload(videoFilePath, videoFileName)) {
-          Log.d(TAG, "Skipping network subtitle autoload for: $videoFilePath")
-          return@withContext
-        }
-        // For network streams, try to load subtitles with common extensions
-        autoloadNetworkSubtitles(videoFilePath, videoFileName)
+        Log.d(TAG, "Skipping direct network subtitle autoload for: $videoFilePath")
+        return@withContext
       } else {
         // For local files, scan the directory
         autoloadLocalSubtitles(videoFilePath, videoFileName)
@@ -206,41 +188,6 @@ object SubtitleOps : KoinComponent {
           MPVLib.command("sub-add", subtitle.absolutePath, flag, subtitle.name)
           Log.d(TAG, "Loaded local subtitle: ${subtitle.name} (flag=$flag)")
         }
-      }
-    }
-  }
-
-  private suspend fun autoloadNetworkSubtitles(
-    videoFilePath: String,
-    videoFileName: String,
-  ) {
-    // Get base name without extension
-    val baseName = videoFileName.substringBeforeLast('.')
-
-    // Get the base URL (path without the filename)
-    val lastSlashIndex = videoFilePath.lastIndexOf('/')
-    if (lastSlashIndex == -1) return
-
-    val baseUrl = videoFilePath.substring(0, lastSlashIndex + 1)
-
-    // Common subtitle extensions to try
-    val subtitleExtensions = listOf("srt", "ass", "ssa", "vtt", "sub")
-
-    // Keep mpv calls off the main thread for network URLs to avoid ANRs.
-    // Try each subtitle extension
-    subtitleExtensions.forEachIndexed { index, ext ->
-      val subtitleUrl = "$baseUrl$baseName.$ext"
-      try {
-        // Try to add the subtitle - MPV will handle if it doesn't exist
-        // Use "auto" flag so MPV doesn't select it if it's not found
-        // Only use "select" for the first one (.srt)
-        val flag = if (index == 0) "select" else "auto"
-        withContext(Dispatchers.Main) {
-          MPVLib.command("sub-add", subtitleUrl, flag, "$baseName.$ext")
-        }
-        Log.d(TAG, "Attempting to load network subtitle: $subtitleUrl (flag=$flag)")
-      } catch (e: Exception) {
-        Log.d(TAG, "Could not load network subtitle $subtitleUrl: ${e.message}")
       }
     }
   }
