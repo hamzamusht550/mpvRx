@@ -277,9 +277,9 @@ fun MoreSheet(
               leadingIcon = null,
               onClick = {
                 decoderPreferences.anime4kMode.set(mode.name)
-                decoderPreferences.enableAnime4KUltra.set(false)
                 if (mode != Anime4KManager.Mode.OFF) {
                   decoderPreferences.anime4kUltraMode.set("OFF")
+                  decoderPreferences.enableAnime4KUltra.set(true)
                 }
 
                 // Apply shaders immediately (runtime change)

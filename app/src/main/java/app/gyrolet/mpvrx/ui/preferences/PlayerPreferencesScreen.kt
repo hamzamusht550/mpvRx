@@ -760,6 +760,21 @@ object PlayerPreferencesScreen : Screen {
                   )
                 },
               )
+
+              PreferenceDivider()
+
+              val showProviderStatusOverlay by preferences.showProviderStatusOverlay.collectAsState()
+              SwitchPreference(
+                value = showProviderStatusOverlay,
+                onValueChange = preferences.showProviderStatusOverlay::set,
+                title = { Text(stringResource(R.string.pref_provider_status_overlay_title)) },
+                summary = {
+                  Text(
+                    stringResource(R.string.pref_provider_status_overlay_summary),
+                    color = MaterialTheme.colorScheme.outline,
+                  )
+                },
+              )
             }
           }
         }

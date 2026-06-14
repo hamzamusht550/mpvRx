@@ -84,6 +84,7 @@ import `is`.xyz.mpv.MPVNode
 import `is`.xyz.mpv.Utils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.combine
@@ -93,6 +94,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
 import java.io.File
@@ -318,6 +320,8 @@ class PlayerActivity :
   private var systemBarsAutoHideJob: Job? = null
   private var videoParamRefreshJob: Job? = null
   private var intentSubtitleJob: Job? = null
+  private val mpvDestroyScope = kotlinx.coroutines.CoroutineScope(SupervisorJob() + Dispatchers.Default)
+  private var mpvDestroyJob: Job? = null
   private var pendingVideoParamRefreshRequiresShaderReload = false
   private var lastBackgroundThumbnailKey: String? = null
   private var lastBackgroundThumbnail: Bitmap? = null
@@ -576,11 +580,11 @@ class PlayerActivity :
               val targetIndex = playlistIndex.coerceIn(0, playlist.lastIndex)
               loadPlaylistItem(targetIndex)
             } else {
-              player.playFile(playableUri)
+              loadInitialPlayableUri(playableUri)
             }
           }
         } else {
-          player.playFile(playableUri)
+          loadInitialPlayableUri(playableUri)
         }
       }
     }
@@ -946,17 +950,34 @@ class PlayerActivity :
     }.onFailure { e ->
       Log.e(TAG, "Error quitting MPV", e)
     }
-    destroyMpvAfterCommandDrain("player cleanup")
+    destroyMpvAfterCommandDrain("player cleanup", waitForDestroy = false)
   }
 
-  private fun destroyMpvAfterCommandDrain(reason: String) {
-    // mpv's quit command is asynchronous. Destroying the core immediately can abort
-    // inside libmpv's dispatch queue while stream/subtitle work is still unwinding.
-    android.os.SystemClock.sleep(MPV_DESTROY_DRAIN_DELAY_MS)
-    runCatching {
-      MPVLib.destroy()
-    }.onFailure { e ->
-      Log.e(TAG, "Error destroying MPV after $reason", e)
+  private fun destroyMpvAfterCommandDrain(
+    reason: String,
+    waitForDestroy: Boolean = false,
+  ) {
+    // mpv's quit command is asynchronous. Destroying the core immediately on
+    // Activity teardown can block the UI thread or abort inside libmpv's dispatch
+    // queue while HTTPS/HLS stream work is still unwinding.
+    suspend fun drainAndDestroy() {
+      delay(MPV_DESTROY_DRAIN_DELAY_MS)
+      runCatching {
+        MPVLib.destroy()
+      }.onFailure { e ->
+        Log.e(TAG, "Error destroying MPV after $reason", e)
+      }
+    }
+
+    mpvDestroyJob?.cancel()
+    if (waitForDestroy) {
+      runBlocking(Dispatchers.Default) {
+        drainAndDestroy()
+      }
+    } else {
+      mpvDestroyJob = mpvDestroyScope.launch {
+        drainAndDestroy()
+      }
     }
   }
 
@@ -1337,7 +1358,7 @@ class PlayerActivity :
     }.onFailure { e ->
       Log.e(TAG, "Error quitting detached MPV session", e)
     }
-    destroyMpvAfterCommandDrain("detached background session")
+    destroyMpvAfterCommandDrain("detached background session", waitForDestroy = true)
   }
 
   private fun isNotificationReentryIntent(intent: Intent?): Boolean =
@@ -2284,6 +2305,26 @@ class PlayerActivity :
       uri.toUri().openContentFd(this)
     } else {
       uri
+    }
+  }
+
+  private fun loadInitialPlayableUri(uri: String) {
+    if (HttpUtils.isNetworkStream(uri.toUri())) {
+      loadFileWithMpvCommand(uri)
+    } else {
+      player.playFile(uri)
+    }
+  }
+
+  private fun loadFileWithMpvCommand(uri: String) {
+    lifecycleScope.launch(Dispatchers.Default) {
+      if (!canIssueMpvCommands()) return@launch
+      runCatching {
+        MPVLib.setPropertyString("vid", "auto")
+        MPVLib.command("loadfile", uri)
+      }.onFailure { e ->
+        Log.e(TAG, "Failed to load file with mpv command", e)
+      }
     }
   }
 
@@ -3401,18 +3442,11 @@ class PlayerActivity :
             val targetIndex = playlistIndex.coerceIn(0, playlist.lastIndex)
             loadPlaylistItem(targetIndex)
           } else {
-            lifecycleScope.launch(Dispatchers.Default) {
-              MPVLib.setPropertyString("vid", "no")
-              MPVLib.command("loadfile", uri)
-            }
+            loadFileWithMpvCommand(uri)
           }
         }
       } else {
-        // Avoid blocking UI thread while mpv opens network streams (e.g., HLS).
-        lifecycleScope.launch(Dispatchers.Default) {
-          MPVLib.setPropertyString("vid", "no")
-          MPVLib.command("loadfile", uri)
-        }
+        loadInitialPlayableUri(uri)
       }
     }
   }
@@ -4880,9 +4914,9 @@ class PlayerActivity :
     private const val MILLISECONDS_TO_SECONDS = 1000
 
     /**
-     * Briefly lets mpv drain asynchronous quit/stream work before destroying the native core.
+     * Lets mpv drain asynchronous quit/HTTPS stream work before destroying the native core.
      */
-    private const val MPV_DESTROY_DRAIN_DELAY_MS = 200L
+    private const val MPV_DESTROY_DRAIN_DELAY_MS = 750L
 
     /**
      * Factor to divide subtitle and audio delays to convert from ms to seconds.

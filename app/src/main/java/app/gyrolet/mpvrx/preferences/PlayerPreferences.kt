@@ -153,6 +153,8 @@ class PlayerPreferences(
   val showRepeatShuffleOverlay = preferenceStore.getBoolean("show_repeat_shuffle_overlay", true)
   /** Show brief text pills from custom buttons, ambient toggle, subtitle drag, and Lua scripts. */
   val showActionFeedbackOverlay = preferenceStore.getBoolean("show_action_feedback_overlay", true)
+  /** Show provider/network status feedback such as online subtitle and marker lookup failures. */
+  val showProviderStatusOverlay = preferenceStore.getBoolean("show_provider_status_overlay", false)
 
   // ── Animation settings ──────────────────────────────────────────────────
   /** Style used for controls appearing / disappearing. Default = original slide+fade behaviour. */

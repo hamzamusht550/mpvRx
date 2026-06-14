@@ -142,31 +142,6 @@ fun AmbientSheet(
             opacity = opacity,
         )
     }
-    val isEco = when (ambientMode) {
-        AmbientVisualMode.GLOW -> matchesGlowPreset(
-            preset = AmbientShaderPresets.glowEco,
-            blurSamples = blurSamples,
-            maxRadius = maxRadius,
-            glowIntensity = glowIntensity,
-            satBoost = satBoost,
-            vignetteStrength = vignetteStrength,
-            warmth = warmth,
-            fadeCurve = fadeCurve,
-            opacity = opacity,
-        )
-        AmbientVisualMode.FRAME_EXTEND -> matchesFrameExtendPreset(
-            preset = AmbientShaderPresets.frameExtendEco,
-            sampleBudget = blurSamples,
-            extendStrength = frameExtendStrength,
-            detailProtection = frameExtendDetailProtection,
-            glowMix = frameExtendGlowMix,
-            ditherNoise = ditherNoise,
-            bezelDepth = bezelDepth,
-            vignetteStrength = vignetteStrength,
-            opacity = opacity,
-        )
-    }
-
     val configuration = LocalConfiguration.current
     val customMaxHeight = if (configuration.orientation == Configuration.ORIENTATION_PORTRAIT) {
         (configuration.screenHeightDp * 0.5f).dp
@@ -206,11 +181,6 @@ fun AmbientSheet(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ExpressivePresetButton(
-                    label = "Eco",
-                    selected = isEco,
-                    onClick = { viewModel.applyAmbientProfileEco() },
-                )
                 ExpressivePresetButton(
                     label = "Fast",
                     selected = isFast,

@@ -142,6 +142,10 @@ sealed class PlayerUpdates {
     val value: String,
   ) : PlayerUpdates()
 
+  data class ProviderStatusText(
+    val value: String,
+  ) : PlayerUpdates()
+
   data class RepeatMode(
     val mode: app.gyrolet.mpvrx.ui.player.RepeatMode,
   ) : PlayerUpdates()

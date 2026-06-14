@@ -71,7 +71,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.gyrolet.mpvrx.ui.player.controls.LocalPlayerButtonsClickEvent
@@ -479,6 +481,7 @@ fun SeekThumbnailPreviewBubble(
   bitmap: Bitmap?,
   isLoading: Boolean,
   isPortrait: Boolean,
+  chapterTitle: String? = null,
   modifier: Modifier = Modifier,
 ) {
   AnimatedVisibility(
@@ -502,6 +505,29 @@ fun SeekThumbnailPreviewBubble(
             .width(previewWidth),
         horizontalAlignment = Alignment.CenterHorizontally,
       ) {
+        chapterTitle?.takeIf { it.isNotBlank() }?.let { title ->
+          Surface(
+            modifier =
+              Modifier
+                .fillMaxWidth()
+                .padding(bottom = 5.dp),
+            shape = RoundedCornerShape(999.dp),
+            color = Color.Black.copy(alpha = 0.82f),
+            contentColor = Color.White,
+            tonalElevation = 0.dp,
+          ) {
+            Text(
+              text = title,
+              modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+              style = MaterialTheme.typography.labelSmall,
+              fontWeight = FontWeight.SemiBold,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+              textAlign = TextAlign.Center,
+            )
+          }
+        }
+
         Surface(
           modifier =
             Modifier

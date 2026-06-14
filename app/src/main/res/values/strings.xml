@@ -597,6 +597,8 @@
   <string name="pref_repeat_shuffle_overlay_summary">Show pill when toggling repeat mode or shuffle</string>
   <string name="pref_action_feedback_overlay_title">Action feedback pills</string>
   <string name="pref_action_feedback_overlay_summary">Show brief text pills from custom buttons, ambient toggle, subtitle drag, and Lua scripts</string>
+  <string name="pref_provider_status_overlay_title">Provider status feedback</string>
+  <string name="pref_provider_status_overlay_summary">Show online provider error/status messages for Wyzie subtitle and marker lookups</string>
 
   <!-- ═══════════════════════════════════════════════════════════ -->
   <!-- Gestures - Swipe & Speed Section                           -->

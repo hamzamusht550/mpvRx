@@ -27,11 +27,9 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.Canvas
 import android.content.res.Configuration.ORIENTATION_PORTRAIT
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -86,10 +84,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -101,9 +98,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -152,6 +152,7 @@ import app.gyrolet.mpvrx.ui.theme.playerRippleConfiguration
 import app.gyrolet.mpvrx.ui.theme.spacing
 import `is`.xyz.mpv.MPVLib
 import `is`.xyz.mpv.Utils
+import dev.vivvvek.seeker.Segment
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.delay
@@ -214,6 +215,7 @@ fun PlayerControls(
   val seekbarDuration = if (preciseDuration > 0) preciseDuration else duration?.toFloat() ?: 0f
   val seekState by viewModel.seekState.collectAsState()
   val seekPreview by viewModel.seekThumbnailPreview.collectAsState()
+  val brightness by viewModel.currentBrightness.collectAsState()
   val doubleTapSeekAmount = seekState.amount
   val showDoubleTapOvals by playerPreferences.showDoubleTapOvals.collectAsState()
   val showSeekTime by playerPreferences.showSeekTimeWhileSeeking.collectAsState()
@@ -420,7 +422,6 @@ fun PlayerControls(
 
         val isBrightnessSliderShown by viewModel.isBrightnessSliderShown.collectAsState()
         val isVolumeSliderShown by viewModel.isVolumeSliderShown.collectAsState()
-        val brightness by viewModel.currentBrightness.collectAsState()
         val volume by viewModel.currentVolume.collectAsState()
         val volumePercent by viewModel.currentVolumePercent.collectAsState()
         val mpvVolume by MPVLib.propInt["volume"].collectAsState()
@@ -571,20 +572,22 @@ fun PlayerControls(
         val showZoomLevelOverlay by playerPreferences.showZoomLevelOverlay.collectAsState()
         val showRepeatShuffleOverlay by playerPreferences.showRepeatShuffleOverlay.collectAsState()
         val showActionFeedbackOverlay by playerPreferences.showActionFeedbackOverlay.collectAsState()
+        val showProviderStatusOverlay by playerPreferences.showProviderStatusOverlay.collectAsState()
 
         // Determines whether the center action-pill should be visible for the current update.
         // Each update type is gated by its own toggle so the user can silence individual
         // categories without affecting the others or the underlying gesture behaviour.
         val shouldShowPlayerUpdate = when (currentPlayerUpdate) {
-          is PlayerUpdates.MultipleSpeed,
-          is PlayerUpdates.DynamicSpeedControl  -> showHoldSpeedOverlay
+          is PlayerUpdates.MultipleSpeed,        -> showHoldSpeedOverlay
+          is PlayerUpdates.DynamicSpeedControl   -> showHoldSpeedOverlay
           is PlayerUpdates.AspectRatio           -> showAspectRatioOverlay
           is PlayerUpdates.VideoZoom             -> showZoomLevelOverlay
           is PlayerUpdates.SubtitleZoom          -> showZoomLevelOverlay
-          is PlayerUpdates.RepeatMode,
+          is PlayerUpdates.RepeatMode,           -> showActionFeedbackOverlay
           is PlayerUpdates.Shuffle               -> showRepeatShuffleOverlay
           is PlayerUpdates.ShowText              -> showActionFeedbackOverlay
-          is PlayerUpdates.HorizontalSeek,
+          is PlayerUpdates.ProviderStatusText    -> showProviderStatusOverlay
+          is PlayerUpdates.HorizontalSeek        -> showActionFeedbackOverlay
           is PlayerUpdates.FrameInfo             -> true   // Groups 3/4 — not in scope
           is PlayerUpdates.None                  -> false
         }
@@ -691,6 +694,12 @@ fun PlayerControls(
             is PlayerUpdates.ShowText ->
               TextPlayerUpdate(
                 (currentPlayerUpdate as PlayerUpdates.ShowText).value,
+                modifier = Modifier.widthIn(min = 120.dp),
+              )
+
+            is PlayerUpdates.ProviderStatusText ->
+              TextPlayerUpdate(
+                (currentPlayerUpdate as PlayerUpdates.ProviderStatusText).value,
                 modifier = Modifier.widthIn(min = 120.dp),
               )
 
@@ -1374,6 +1383,11 @@ fun PlayerControls(
           )
         }
 
+        val seekPreviewChapterTitle =
+          remember(chapters, seekPreview.positionSeconds) {
+            chapterNameForPosition(chapters, seekPreview.positionSeconds)
+          }
+
         SeekThumbnailPreviewBubble(
           position = seekPreview.positionSeconds,
           duration = seekbarDuration,
@@ -1381,6 +1395,7 @@ fun PlayerControls(
           bitmap = seekPreview.bitmap,
           isLoading = seekPreview.isLoading,
           isPortrait = isPortrait,
+          chapterTitle = seekPreviewChapterTitle,
           modifier =
             Modifier
               .then(navigationHorizontalPaddingModifier)
@@ -1686,35 +1701,37 @@ fun PlayerControls(
   }
 }
 
+private fun chapterNameForPosition(
+  chapters: List<Segment>,
+  positionSeconds: Float,
+): String? {
+  if (chapters.isEmpty()) return null
+  val chapterIndex =
+    chapters.indexOfLast { chapter ->
+      chapter.start <= positionSeconds
+    }
+  val chapter = chapters.getOrNull(chapterIndex.takeIf { it >= 0 } ?: 0) ?: return null
+  return chapter.name.takeIf { it.isNotBlank() }
+    ?: "Chapter ${chapterIndex.coerceAtLeast(0) + 1}"
+}
+
 private data class CustomStatsSnapshot(
   val fileName: String,
   val renderContext: String,
-  val cache: String,
-  val fps: String,
-  val droppedFrames: String,
   val video: String,
   val audio: String,
   val cpuPercent: Float,
   val gpuEstimatePercent: Float,
-  val networkText: String,
-  val networkMbps: Float,
-  val networkHistory: List<Float>,
   val batteryPercentText: String,
   val batteryRateText: String,
   val batteryWattsText: String,
   val batteryTempText: String,
   val hdrActive: String,
-  // New session & environmental metrics
   val sessionPlayTimeText: String,
   val decoderEfficiencyText: String,
   val thermalStateText: String,
   val peakTempText: String,
   val tempRiseText: String,
-  val sessionDrainText: String,
-  val burnRateText: String,
-  val estRemainingPlaybackText: String,
-  val totalDataConsumedText: String,
-  val stallCountText: String,
 )
 
 @Composable
@@ -1730,16 +1747,10 @@ private fun CustomStatsPageSixOverlay(
       CustomStatsSnapshot(
         fileName = "--",
         renderContext = "--",
-        cache = "--",
-        fps = "--",
-        droppedFrames = "--",
         video = "--",
         audio = "--",
         cpuPercent = 0f,
         gpuEstimatePercent = 0f,
-        networkText = "0 KB/s",
-        networkMbps = 0f,
-        networkHistory = emptyList(),
         batteryPercentText = "--%",
         batteryRateText = "Unknown",
         batteryWattsText = "-- W",
@@ -1750,52 +1761,33 @@ private fun CustomStatsPageSixOverlay(
         thermalStateText = "Normal",
         peakTempText = "--°C",
         tempRiseText = "+0.0°C",
-        sessionDrainText = "0%",
-        burnRateText = "Calculating...",
-        estRemainingPlaybackText = "Calculating...",
-        totalDataConsumedText = "0 Bytes",
-        stallCountText = "0 stalls",
       ),
     isHdrOutputEnabled,
     hdrScreenMode,
   ) {
-    val history = ArrayDeque<Float>()
     var lastCpuMs   = runCatching { android.os.Process.getElapsedCpuTime() }.getOrDefault(0L)
     var lastTimeMs  = android.os.SystemClock.elapsedRealtime()
     
-    // Session variables
-    val sessionStartRealtime = android.os.SystemClock.elapsedRealtime()
-    var startBatteryPercent: Int? = null
     var startBatteryTemp: Float? = null
     var peakBatteryTemp = 0.0f
-    var accumulatedNetworkBytes = 0L
-    var previousPausedForCache = false
-    var stallCount = 0
-    var stallTimeMs = 0L
     var totalActivePlayTimeMs = 0L
-
-    // Track PREVIOUS cumulative counts so we can compute per-second DELTA rates.
     var lastDropped = 0
     var lastDelayed = 0
 
     while (true) {
       val fileName      = runCatching { MPVLib.getPropertyString("media-title") ?: "--" }.getOrDefault("--")
       val renderContext = runCatching { MPVLib.getPropertyString("current-vo")  ?: "--" }.getOrDefault("--")
-      val cache         = runCatching { MPVLib.getPropertyString("demuxer-cache-duration") ?: "--" }.getOrDefault("--")
-      val fps           = runCatching { MPVLib.getPropertyDouble("estimated-vf-fps")?.let { String.format("%.3f", it) } ?: "--" }.getOrDefault("--")
       val dropped       = runCatching { MPVLib.getPropertyInt("drop-frame-count")       ?: 0 }.getOrDefault(0)
       val delayed       = runCatching { MPVLib.getPropertyInt("vo-delayed-frame-count") ?: 0 }.getOrDefault(0)
       val videoCodec    = runCatching { MPVLib.getPropertyString("video-codec")      ?: "--" }.getOrDefault("--")
       val audioCodec    = runCatching { MPVLib.getPropertyString("audio-codec-name") ?: "--" }.getOrDefault("--")
 
-      // ── App CPU % ──────────────────────────────────────────────────────────
       val currentCpuMs  = runCatching { android.os.Process.getElapsedCpuTime() }.getOrDefault(lastCpuMs)
       val currentTimeMs = android.os.SystemClock.elapsedRealtime()
       val cpuDelta      = (currentCpuMs - lastCpuMs).coerceAtLeast(0L)
       val timeDelta     = (currentTimeMs - lastTimeMs).coerceAtLeast(1L)
       val cpu           = ((cpuDelta.toFloat() / timeDelta.toFloat()) * 100f).coerceIn(0f, 100f)
 
-      // ── GPU pressure estimate ──────────────────────────────────────────────
       val estFps         = runCatching { MPVLib.getPropertyDouble("estimated-vf-fps") ?: 0.0 }.getOrDefault(0.0).toFloat()
       val droppedDelta   = (dropped - lastDropped).coerceAtLeast(0)
       val delayedDelta   = (delayed - lastDelayed).coerceAtLeast(0)
@@ -1804,71 +1796,23 @@ private fun CustomStatsPageSixOverlay(
       } else 0f
       val gpuEstimate    = (framePressure * 95f + if (estFps > 0f) 5f else 0f).coerceIn(0f, 100f)
 
-      val netBps = readNetworkBytesPerSecondForOverlay()
-      val netText =
-        when {
-          netBps >= 1024 * 1024 -> String.format("%.1f MB/s", netBps / (1024 * 1024))
-          netBps >= 1024        -> String.format("%.0f KB/s", netBps / 1024)
-          else                  -> "${netBps.toInt()} B/s"
-        }
-      val netMbps = ((netBps * 8.0) / (1024.0 * 1024.0)).toFloat().coerceAtLeast(0f)
       val battery = readBatterySnapshot(context)
-      history.addLast(netMbps)
-      if (history.size > 42) history.removeFirst()
-
       val isPaused = runCatching { MPVLib.getPropertyBoolean("pause") }.getOrDefault(false) == true
 
-      // ── Active playtime tracking ───────────────────────────────────────────
       if (!isPaused) {
         totalActivePlayTimeMs += timeDelta
       }
       val playSecs = totalActivePlayTimeMs / 1000L
       val sessionPlayTimeText = String.format("%02d:%02d:%02d", playSecs / 3600, (playSecs % 3600) / 60, playSecs % 60)
 
-      // ── Battery numeric parsing & metrics ──────────────────────────────────
-      val currentPercentText = battery.percentageText.replace("%", "").trim()
-      val currentPercent = currentPercentText.toIntOrNull() ?: 0
       val currentTempText = battery.tempText.replace("°C", "").trim()
       val currentTemp = currentTempText.toFloatOrNull() ?: 0f
 
-      if (startBatteryPercent == null && currentPercent > 0) {
-        startBatteryPercent = currentPercent
-      }
       if (startBatteryTemp == null && currentTemp > 0f) {
         startBatteryTemp = currentTemp
       }
       if (currentTemp > peakBatteryTemp) {
         peakBatteryTemp = currentTemp
-      }
-
-      val sessionDrainText = if (startBatteryPercent != null) {
-        val drainPercent = startBatteryPercent - currentPercent
-        "$drainPercent%"
-      } else {
-        "0%"
-      }
-
-      val activeHours = totalActivePlayTimeMs / 3600000f
-      val burnRateText = if (startBatteryPercent != null && activeHours > 0.005f) {
-        val drainPercent = startBatteryPercent - currentPercent
-        val rate = drainPercent / activeHours
-        String.format("%.1f%% / hr", rate)
-      } else {
-        "Calculating..."
-      }
-
-      val estRemainingPlaybackText = if (startBatteryPercent != null && activeHours > 0.005f) {
-        val drainPercent = startBatteryPercent - currentPercent
-        if (drainPercent > 0) {
-          val rate = drainPercent / activeHours
-          val hoursLeft = currentPercent / rate
-          val minsLeft = (hoursLeft * 60).roundToInt()
-          String.format("%dh %dm", minsLeft / 60, minsLeft % 60)
-        } else {
-          "Calculating..."
-        }
-      } else {
-        "Calculating..."
       }
 
       val peakTempText = if (peakBatteryTemp > 0f) String.format("%.1f°C", peakBatteryTemp) else "--°C"
@@ -1879,7 +1823,6 @@ private fun CustomStatsPageSixOverlay(
         "+0.0°C"
       }
 
-      // ── Android Thermal Status ─────────────────────────────────────────────
       val powerManager = context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
       val thermalStatus = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
         powerManager?.currentThermalStatus ?: 0
@@ -1897,7 +1840,6 @@ private fun CustomStatsPageSixOverlay(
         else -> "Normal"
       }
 
-      // ── Decoder Efficiency ─────────────────────────────────────────────────
       val currentHwdec = runCatching { MPVLib.getPropertyString("hwdec-current") ?: "no" }.getOrDefault("no")
       val gpuApi = runCatching { MPVLib.getPropertyString("gpu-api") ?: "opengl" }.getOrDefault("opengl")
       val decoderEfficiencyText = when {
@@ -1906,42 +1848,13 @@ private fun CustomStatsPageSixOverlay(
         else -> "High (Hardware Direct, $gpuApi backend)"
       }
 
-      // ── Network / Cache stalls ─────────────────────────────────────────────
-      val pausedForCache = runCatching { MPVLib.getPropertyBoolean("paused-for-cache") }.getOrDefault(false) == true
-      if (pausedForCache) {
-        if (!previousPausedForCache) {
-          stallCount++
-        }
-        stallTimeMs += timeDelta
-      }
-      previousPausedForCache = pausedForCache
-      val stallCountText = if (stallCount > 0) {
-        "$stallCount times  (${String.format("%.1fs", stallTimeMs / 1000f)} total)"
-      } else {
-        "0 stalls"
-      }
-
-      accumulatedNetworkBytes += (netBps * (timeDelta / 1000f)).toLong()
-      val totalDataConsumedText = when {
-        accumulatedNetworkBytes >= 1024 * 1024 * 1024 -> String.format("%.2f GB", accumulatedNetworkBytes / (1024f * 1024f * 1024f))
-        accumulatedNetworkBytes >= 1024 * 1024 -> String.format("%.1f MB", accumulatedNetworkBytes / (1024f * 1024f))
-        accumulatedNetworkBytes >= 1024 -> String.format("%.0f KB", accumulatedNetworkBytes / 1024f)
-        else -> "$accumulatedNetworkBytes Bytes"
-      }
-
       value = CustomStatsSnapshot(
         fileName          = fileName,
         renderContext     = renderContext,
-        cache             = cache,
-        fps               = fps,
-        droppedFrames     = "$dropped (decoder)  $delayed (output)  +$droppedDelta/+$delayedDelta this sec",
         video             = videoCodec,
         audio             = audioCodec,
         cpuPercent        = cpu,
         gpuEstimatePercent= gpuEstimate,
-        networkText       = netText,
-        networkMbps       = netMbps,
-        networkHistory    = history.toList(),
         batteryPercentText= battery.percentageText,
         batteryRateText   = battery.rateText,
         batteryWattsText  = battery.wattsText,
@@ -1969,20 +1882,13 @@ private fun CustomStatsPageSixOverlay(
         thermalStateText  = thermalStateText,
         peakTempText      = peakTempText,
         tempRiseText      = tempRiseText,
-        sessionDrainText  = sessionDrainText,
-        burnRateText      = burnRateText,
-        estRemainingPlaybackText = estRemainingPlaybackText,
-        totalDataConsumedText = totalDataConsumedText,
-        stallCountText    = stallCountText,
       )
 
-      // Advance delta baselines
       lastCpuMs   = currentCpuMs
       lastTimeMs  = currentTimeMs
       lastDropped = dropped
       lastDelayed = delayed
 
-      // Polling every 2 s when paused instead of 1 s halves JNI overhead
       delay(if (isPaused) 2000L else 1000L)
     }
   }
@@ -1994,10 +1900,9 @@ private fun CustomStatsPageSixOverlay(
         .alpha(0.88f),
     verticalArrangement = Arrangement.spacedBy(1.dp),
   ) {
-    val textStyle =
+    val baseStyle =
       MaterialTheme.typography.bodySmall.copy(
         color = Color.White,
-        fontFamily = FontFamily.Monospace,
         fontSize = 8.sp,
         lineHeight = 10.sp,
         shadow = Shadow(
@@ -2006,38 +1911,24 @@ private fun CustomStatsPageSixOverlay(
           blurRadius = 3f,
         ),
       )
-    val headerStyle = textStyle.copy(fontWeight = FontWeight.Bold, fontSize = 8.5.sp)
+    val headerStyle = baseStyle.copy(fontWeight = FontWeight.Bold, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, fontSize = 8.5.sp)
+    val labelStyle = baseStyle.copy(fontWeight = FontWeight.Bold)
+    val valueStyle = baseStyle
 
     OutlinedText("--- PLAYBACK & DECODER ---", style = headerStyle)
-    OutlinedText("File: ${stats.fileName}", style = textStyle)
-    OutlinedText("Decoder & VO: ${stats.renderContext} | ${stats.video} | Efficiency: ${stats.decoderEfficiencyText}", style = textStyle)
-    OutlinedText("Refresh Rate: ${stats.fps} Hz | Dropped: ${stats.droppedFrames}", style = textStyle)
-    OutlinedText("Audio: ${stats.audio} | HDR: ${stats.hdrActive}", style = textStyle)
+    OutlinedLabeled("File", stats.fileName, labelStyle, valueStyle)
+    OutlinedLabeled("Decoder & VO", "${stats.renderContext} | ${stats.video} | Eff: ${stats.decoderEfficiencyText}", labelStyle, valueStyle)
+    OutlinedLabeled("Audio", "${stats.audio} | HDR: ${stats.hdrActive}", labelStyle, valueStyle)
 
     Spacer(modifier = Modifier.height(2.dp))
     OutlinedText("--- POWER & THERMALS ---", style = headerStyle)
-    OutlinedText("Battery Level: ${stats.batteryPercentText} | Power: ${stats.batteryWattsText} | Rate: ${stats.batteryRateText}", style = textStyle)
-    OutlinedText("Temp: ${stats.batteryTempText} (Peak: ${stats.peakTempText} | Rise: ${stats.tempRiseText})", style = textStyle)
-    OutlinedText("Thermal State: ${stats.thermalStateText}", style = textStyle)
-    OutlinedText("Session Drain: ${stats.sessionDrainText} | Burn Rate: ${stats.burnRateText} | Projected Playback: ${stats.estRemainingPlaybackText}", style = textStyle)
+    OutlinedLabeled("Battery", "${stats.batteryPercentText} | ${stats.batteryWattsText} | Rate: ${stats.batteryRateText}", labelStyle, valueStyle)
+    OutlinedLabeled("Temp", "${stats.batteryTempText} (Peak: ${stats.peakTempText} | Rise: ${stats.tempRiseText})", labelStyle, valueStyle)
+    OutlinedLabeled("Thermal", stats.thermalStateText, labelStyle, valueStyle)
 
     Spacer(modifier = Modifier.height(2.dp))
-    OutlinedText("--- CACHE & DATA COST ---", style = headerStyle)
-    OutlinedText("Buffer Health: ${stats.cache} | Stall Count: ${stats.stallCountText}", style = textStyle)
-    OutlinedText("Data Consumed: ${stats.totalDataConsumedText} | Speed: ${stats.networkText} (${String.format("%.1f", stats.networkMbps)} Mbps)", style = textStyle)
-
-    NetworkSparkline(
-      points = stats.networkHistory,
-      modifier =
-        Modifier
-          .fillMaxWidth()
-          .height(28.dp)
-          .padding(top = 2.dp, bottom = 2.dp),
-    )
-
-    Spacer(modifier = Modifier.height(2.dp))
-    OutlinedText("--- SESSION PERFORMANCE SUMMARY ---", style = headerStyle)
-    OutlinedText("Active Playtime: ${stats.sessionPlayTimeText}", style = textStyle)
+    OutlinedText("--- SESSION ---", style = headerStyle)
+    OutlinedLabeled("Active", stats.sessionPlayTimeText, labelStyle, valueStyle)
 
     LinearProgressIndicator(
       progress = { stats.cpuPercent / 100f },
@@ -2046,7 +1937,7 @@ private fun CustomStatsPageSixOverlay(
         .height(3.dp)
         .padding(vertical = 0.5.dp)
     )
-    OutlinedText("App CPU (this process) ${stats.cpuPercent.toInt()}%", style = textStyle)
+    OutlinedLabeled("App CPU", "${stats.cpuPercent.toInt()}%", labelStyle, valueStyle)
     LinearProgressIndicator(
       progress = { stats.gpuEstimatePercent / 100f },
       modifier = Modifier
@@ -2054,71 +1945,8 @@ private fun CustomStatsPageSixOverlay(
         .height(3.dp)
         .padding(vertical = 0.5.dp)
     )
-    OutlinedText("Frame Pressure (drop-based est.) ${stats.gpuEstimatePercent.toInt()}%", style = textStyle)
+    OutlinedLabeled("Frame Pressure", "${stats.gpuEstimatePercent.toInt()}%", labelStyle, valueStyle)
   }
-}
-
-@Composable
-private fun NetworkSparkline(
-  points: List<Float>,
-  modifier: Modifier = Modifier,
-) {
-  Canvas(modifier = modifier) {
-    if (points.size < 2) return@Canvas
-
-    val maxY = (points.maxOrNull() ?: 1f).coerceAtLeast(1f)
-    val stepX = size.width / (points.size - 1).coerceAtLeast(1)
-
-    val linePath = Path()
-    val fillPath = Path()
-
-    points.forEachIndexed { index, value ->
-      val x = index * stepX
-      val normalized = (value / maxY).coerceIn(0f, 1f)
-      val y = size.height - (normalized * size.height)
-      if (index == 0) {
-        linePath.moveTo(x, y)
-        fillPath.moveTo(x, size.height)
-        fillPath.lineTo(x, y)
-      } else {
-        linePath.lineTo(x, y)
-        fillPath.lineTo(x, y)
-      }
-    }
-
-    fillPath.lineTo(size.width, size.height)
-    fillPath.close()
-
-    drawPath(
-      path = fillPath,
-      brush =
-        Brush.verticalGradient(
-          colors = listOf(Color(0x66FF9800), Color(0x12FF9800)),
-        ),
-    )
-    drawPath(
-      path = linePath,
-      color = Color(0xFFFFB74D),
-      style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.2f),
-    )
-  }
-}
-
-private fun readNetworkBytesPerSecondForOverlay(): Double {
-  val directBytesPerSecond = listOf("demuxer-cache-speed", "cache-speed", "demuxer-speed")
-    .asSequence()
-    .mapNotNull { name -> runCatching { MPVLib.getPropertyDouble(name) }.getOrNull() }
-    .firstOrNull { it > 0.0 }
-
-  if (directBytesPerSecond != null) return directBytesPerSecond
-
-  val bitratesBitsPerSecond = listOf("packet-video-bitrate", "video-bitrate", "audio-bitrate")
-    .asSequence()
-    .mapNotNull { name -> runCatching { MPVLib.getPropertyDouble(name) }.getOrNull() }
-    .filter { it > 0.0 }
-    .sum()
-
-  return if (bitratesBitsPerSecond > 0.0) bitratesBitsPerSecond / 8.0 else 0.0
 }
 
 @Composable
@@ -2141,6 +1969,40 @@ private fun OutlinedText(
     Text(
       text = text,
       style = style
+    )
+  }
+}
+
+@Composable
+private fun OutlinedLabeled(
+  label: String,
+  value: String,
+  labelStyle: androidx.compose.ui.text.TextStyle,
+  valueStyle: androidx.compose.ui.text.TextStyle,
+) {
+  val annotated = buildAnnotatedString {
+    withStyle(SpanStyle(fontWeight = labelStyle.fontWeight)) {
+      append("$label: ")
+    }
+    withStyle(SpanStyle(fontWeight = valueStyle.fontWeight)) {
+      append(value)
+    }
+  }
+  Box {
+    Text(
+      text = annotated,
+      style = labelStyle.copy(
+        color = Color.Black,
+        shadow = null,
+        drawStyle = Stroke(
+          width = with(LocalDensity.current) { 1.2.dp.toPx() },
+          join = StrokeJoin.Round
+        )
+      )
+    )
+    Text(
+      text = annotated,
+      style = labelStyle
     )
   }
 }

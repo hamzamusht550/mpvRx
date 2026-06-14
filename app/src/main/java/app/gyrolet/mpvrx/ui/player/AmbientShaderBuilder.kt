@@ -38,7 +38,6 @@ data class AmbientGlowShaderSpec(
   val satBoost: Float,
   val warmth: Float,
   val fadeCurve: Float,
-  val ecoMode: Boolean = false,
 ) : AmbientShaderSpec
 
 data class AmbientFrameExtendShaderSpec(
@@ -49,7 +48,6 @@ data class AmbientFrameExtendShaderSpec(
   val detailProtection: Float,
   val glowMix: Float,
   val ditherNoise: Float,
-  val ecoMode: Boolean = false,
 ) : AmbientShaderSpec
 
 data class AmbientGlowPreset(
@@ -61,7 +59,6 @@ data class AmbientGlowPreset(
   val warmth: Float,
   val fadeCurve: Float,
   val opacity: Float,
-  val ecoMode: Boolean = false,
 )
 
 data class AmbientFrameExtendPreset(
@@ -73,7 +70,6 @@ data class AmbientFrameExtendPreset(
   val bezelDepth: Float,
   val vignetteStrength: Float,
   val opacity: Float,
-  val ecoMode: Boolean = false,
 )
 
 object AmbientShaderPresets {
@@ -149,31 +145,6 @@ object AmbientShaderPresets {
       opacity = 1.0f,
     )
 
-  val glowEco =
-    AmbientGlowPreset(
-      blurSamples = 4,
-      maxRadius = 0.15f,
-      glowIntensity = 1.2f,
-      satBoost = 1.0f,
-      vignetteStrength = 0.0f,
-      warmth = 0.0f,
-      fadeCurve = 1.0f,
-      opacity = 0.7f,
-      ecoMode = true,
-    )
-
-  val frameExtendEco =
-    AmbientFrameExtendPreset(
-      sampleBudget = 8,
-      extendStrength = 0.40f,
-      detailProtection = 0.90f,
-      glowMix = 0.50f,
-      ditherNoise = 0.0f,
-      bezelDepth = 0.0f,
-      vignetteStrength = 0.0f,
-      opacity = 0.6f,
-      ecoMode = true,
-    )
 }
 
 fun matchesGlowPreset(
@@ -194,8 +165,7 @@ fun matchesGlowPreset(
     closeTo(vignetteStrength, preset.vignetteStrength) &&
     closeTo(warmth, preset.warmth) &&
     closeTo(fadeCurve, preset.fadeCurve) &&
-    closeTo(opacity, preset.opacity) &&
-    preset.ecoMode == (blurSamples <= 4)
+    closeTo(opacity, preset.opacity)
 
 fun matchesFrameExtendPreset(
   preset: AmbientFrameExtendPreset,
@@ -215,8 +185,7 @@ fun matchesFrameExtendPreset(
     closeTo(ditherNoise, preset.ditherNoise, 0.001f) &&
     closeTo(bezelDepth, preset.bezelDepth, 0.001f) &&
     closeTo(vignetteStrength, preset.vignetteStrength) &&
-    closeTo(opacity, preset.opacity) &&
-    preset.ecoMode == (sampleBudget <= 8)
+    closeTo(opacity, preset.opacity)
 
 fun closeTo(
   left: Float,
@@ -260,57 +229,7 @@ object AmbientShaderBuilder {
     }
 
   private fun buildGlow(spec: AmbientGlowShaderSpec): String =
-    if (spec.ecoMode) buildGlowEco(spec) else buildGlowFull(spec)
-
-  private fun buildGlowEco(spec: AmbientGlowShaderSpec): String =
-    """
-//!HOOK OUTPUT
-//!BIND HOOKED
-//!DESC True Ambient Mode (Eco)
-
-#define BLUR_SAMPLES     ${spec.blurSamples}
-#define MAX_RADIUS       ${spec.maxRadius}
-#define GLOW_INTENSITY   ${spec.glowIntensity}
-#define SAT_BOOST        ${spec.satBoost}
-#define OPACITY          ${spec.shared.opacity}
-#define SCALE_X          ${spec.context.scaleX}
-#define SCALE_Y          ${spec.context.scaleY}
-
-${buildSpiralTapTable("GLOW_TAPS", spec.blurSamples) { radiusNorm, _ -> radiusNorm }}
-
-vec4 hook() {
-    vec2 uv = HOOKED_pos;
-    vec2 video_uv = (uv - 0.5) * vec2(SCALE_X, SCALE_Y) + 0.5;
-
-    if (video_uv.x >= 0.0 && video_uv.x <= 1.0 &&
-        video_uv.y >= 0.0 && video_uv.y <= 1.0) {
-        return HOOKED_tex(video_uv);
-    }
-
-    vec2 edge_origin = clamp(video_uv, 0.0, 1.0);
-    float edge_fade = exp(-length(video_uv - edge_origin) * (3.0 / max(MAX_RADIUS, 0.001)));
-
-    vec3 acc_color = vec3(0.0);
-    float acc_weight = 0.0;
-
-    for (int i = 0; i < BLUR_SAMPLES; i++) {
-        vec3 tap = GLOW_TAPS[i];
-        vec2 offset = tap.xy * MAX_RADIUS;
-        vec2 sample_uv = clamp(edge_origin + offset, 0.0, 1.0);
-        vec3 sample_rgb = HOOKED_tex(sample_uv).rgb;
-
-        float weight = 1.0 / (1.0 + tap.z * 20.0);
-        acc_color += sample_rgb * weight;
-        acc_weight += weight;
-    }
-
-    vec3 glow = (acc_color / max(acc_weight, 1e-5)) * GLOW_INTENSITY;
-    glow = mix(vec3(dot(glow, vec3(0.2126, 0.7152, 0.0722))), glow, SAT_BOOST);
-    glow *= edge_fade;
-
-    return vec4(glow * OPACITY, 1.0);
-}
-    """.trimIndent()
+    buildGlowFull(spec)
 
   private fun buildGlowFull(spec: AmbientGlowShaderSpec): String =
     """
@@ -413,83 +332,7 @@ vec4 hook() {
     """.trimIndent()
 
   private fun buildFrameExtend(spec: AmbientFrameExtendShaderSpec): String =
-    if (spec.ecoMode) buildFrameExtendEco(spec) else buildFrameExtendFull(spec)
-
-  private fun buildFrameExtendEco(spec: AmbientFrameExtendShaderSpec): String {
-    val glowSamples = 4
-    return """
-//!HOOK OUTPUT
-//!BIND HOOKED
-//!DESC Frame Extend Ambient Mode (Eco)
-
-#define EXTEND_STEPS      3
-#define GLOW_SAMPLES      $glowSamples
-#define EXTEND_STRENGTH   ${spec.extendStrength}
-#define DETAIL_PROTECT    ${spec.detailProtection}
-#define GLOW_MIX          ${spec.glowMix}
-#define OPACITY           ${spec.shared.opacity}
-#define SCALE_X           ${spec.context.scaleX}
-#define SCALE_Y           ${spec.context.scaleY}
-
-${buildSpiralTapTable("FRAME_GLOW_TAPS", glowSamples) { _, indexNorm -> indexNorm }}
-
-vec4 hook() {
-    vec2 uv = HOOKED_pos;
-    vec2 video_uv = (uv - 0.5) * vec2(SCALE_X, SCALE_Y) + 0.5;
-
-    if (video_uv.x >= 0.0 && video_uv.x <= 1.0 &&
-        video_uv.y >= 0.0 && video_uv.y <= 1.0) {
-        return HOOKED_tex(video_uv);
-    }
-
-    vec2 edge_origin = clamp(video_uv, 0.0, 1.0);
-    vec2 overflow = video_uv - edge_origin;
-    bool horizontal = abs(overflow.x) >= abs(overflow.y);
-
-    vec2 inward_dir = horizontal
-        ? vec2(overflow.x < 0.0 ? 1.0 : -1.0, 0.0)
-        : vec2(0.0, overflow.y < 0.0 ? 1.0 : -1.0);
-
-    float bar_extent = horizontal
-        ? max((SCALE_X - 1.0) * 0.5, 0.001)
-        : max((SCALE_Y - 1.0) * 0.5, 0.001);
-    float dist_to_edge = horizontal ? abs(overflow.x) : abs(overflow.y);
-    float outside_norm = clamp(dist_to_edge / bar_extent, 0.0, 1.0);
-
-    vec3 edge_rgb = HOOKED_tex(edge_origin).rgb;
-
-    vec3 acc = vec3(0.0);
-    float acc_weight = 0.0;
-    for (int i = 0; i < EXTEND_STEPS; i++) {
-        float fi = float(i + 1) / 3.0;
-        vec2 sample_uv = clamp(edge_origin + inward_dir * (0.02 * fi * EXTEND_STRENGTH), 0.0, 1.0);
-        vec3 sample_rgb = HOOKED_tex(sample_uv).rgb;
-        float weight = 1.0 - fi;
-        acc += sample_rgb * weight;
-        acc_weight += weight;
-    }
-    vec3 extend_rgb = acc / max(acc_weight, 1e-5);
-
-    vec3 glow_acc = vec3(0.0);
-    float glow_w = 0.0;
-    for (int i = 0; i < GLOW_SAMPLES; i++) {
-        vec3 tap = FRAME_GLOW_TAPS[i];
-        vec2 offset = tap.xy * mix(0.01, 0.04, outside_norm);
-        vec2 sample_uv = clamp(edge_origin + offset, 0.0, 1.0);
-        vec3 sample_rgb = HOOKED_tex(sample_uv).rgb;
-        float weight = 1.0 - tap.z;
-        glow_acc += sample_rgb * weight;
-        glow_w += weight;
-    }
-    vec3 glow_rgb = glow_acc / max(glow_w, 1e-5);
-
-    vec3 fill_rgb = mix(extend_rgb, glow_rgb, GLOW_MIX);
-    fill_rgb = mix(edge_rgb, fill_rgb, smoothstep(0.1, 0.8, outside_norm));
-
-    return vec4(fill_rgb * OPACITY, 1.0);
-}
-    """.trimIndent()
-  }
+    buildFrameExtendFull(spec)
 
   private fun buildFrameExtendFull(spec: AmbientFrameExtendShaderSpec): String {
     val effectiveBudget = spec.sampleBudget.coerceIn(8, 32)

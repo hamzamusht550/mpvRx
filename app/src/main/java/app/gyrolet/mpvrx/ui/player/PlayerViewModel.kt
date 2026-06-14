@@ -1344,10 +1344,10 @@ class PlayerViewModel(
     const val TAG = "PlayerViewModel"
     const val AUTO_SHOW_SKIP_CHIP_DURATION = 10.0
     const val SEEK_COALESCE_DELAY_MS = 60L
-    const val SEEK_THUMBNAIL_MAX_SIZE = 240
-    const val SEEK_THUMBNAIL_CACHE_KB = 16 * 1024
+    const val SEEK_THUMBNAIL_MAX_SIZE = 192
+    const val SEEK_THUMBNAIL_CACHE_KB = 12 * 1024
     const val SEEK_THUMBNAIL_CACHE_BUCKETS_PER_SECOND = 1f
-    const val SEEK_THUMBNAIL_PREFETCH_RADIUS = 2
+    const val SEEK_THUMBNAIL_PREFETCH_RADIUS = 1
     const val PLAYLIST_METADATA_PREFETCH_RADIUS = 40
     const val PLAYLIST_METADATA_PREFETCH_LIMIT = 120
     const val MIN_INTRO_MARKER_DURATION_SEC = 480.0
@@ -1358,6 +1358,8 @@ class PlayerViewModel(
     const val INTRO_MARKER_CACHE_LOADED = "loaded"
     const val INTRO_MARKER_CACHE_NO_SEGMENTS = "no_segments"
     const val INTRO_MARKER_CACHE_UNRESOLVED = "unresolved"
+    val networkThumbnailSchemes =
+      setOf("http", "https", "rtmp", "rtmps", "rtsp", "rtsps", "mms", "mmsh", "ftp", "ftps")
     val VALID_SUBTITLE_EXTENSIONS =
       setOf(
         // Common & modern
@@ -1975,7 +1977,7 @@ class PlayerViewModel(
     readIntroMarkerCacheEntry(cacheKey)?.let { cachedEntry ->
       applyIntroMarkerCacheEntry(provider, cachedEntry)
       mergeSkipSegments()
-      playerUpdate.value = PlayerUpdates.ShowText(_introDbStatus.value.message)
+      showProviderStatusFeedback(_introDbStatus.value.message)
       return
     }
     _introDbStatus.value =
@@ -2051,8 +2053,18 @@ class PlayerViewModel(
         applyIntroDbOutcome(outcome)
         cacheIntroDbOutcome(cacheKey, outcome)
         mergeSkipSegments()
-        playerUpdate.value = PlayerUpdates.ShowText(_introDbStatus.value.message)
+        showProviderStatusFeedback(_introDbStatus.value.message)
       }
+  }
+
+  private fun showProviderStatusFeedback(message: String) {
+    if (message.isBlank() || !playerPreferences.showProviderStatusOverlay.get()) return
+    playerUpdate.value = PlayerUpdates.ProviderStatusText(message)
+  }
+
+  private fun showProviderStatusToast(message: String) {
+    if (message.isBlank() || !playerPreferences.showProviderStatusOverlay.get()) return
+    showToast(message)
   }
 
   private fun checkPendingIntroLookup() {
@@ -2471,7 +2483,7 @@ class PlayerViewModel(
           }
         }
         .onFailure {
-          showToast("Failed to load series details: ${it.message}")
+          showProviderStatusToast("Failed to load series details: ${it.message}")
         }
       _isFetchingTvDetails.value = false
     }
@@ -2505,7 +2517,7 @@ class PlayerViewModel(
           }
         }
         .onFailure {
-          showToast("Failed to load episodes: ${it.message}")
+          showProviderStatusToast("Failed to load episodes: ${it.message}")
         }
       _isFetchingEpisodes.value = false
     }
@@ -2599,7 +2611,7 @@ class PlayerViewModel(
                   _onlineSubtitleSearchResults.value = results
              }
              .onFailure {
-                 showToast("Search failed: ${it.message}")
+                 showProviderStatusToast("Search failed: ${it.message}")
              }
           _isSearchingSub.value = false
       }
@@ -2948,7 +2960,7 @@ class PlayerViewModel(
     bitmap: Bitmap,
   ) {
     _seekThumbnailPreview.update { current ->
-      if (!current.visible) {
+      if (!current.visible || seekThumbnailBucket(current.positionSeconds) != request.bucket) {
         current
       } else {
         current.copy(
@@ -2960,6 +2972,8 @@ class PlayerViewModel(
   }
 
   private fun prefetchSeekThumbnails(request: SeekThumbnailRequest) {
+    if (isNetworkSeekThumbnailSource(request.source)) return
+
     val maxBucket =
       if (request.durationSeconds > 0f) {
         seekThumbnailBucket(request.durationSeconds)
@@ -3003,6 +3017,11 @@ class PlayerViewModel(
 
   private fun seekThumbnailCacheKey(source: String, bucket: Int): String =
     "$source|$bucket|$SEEK_THUMBNAIL_MAX_SIZE"
+
+  private fun isNetworkSeekThumbnailSource(source: String): Boolean {
+    val scheme = source.substringBefore(":", missingDelimiterValue = "").lowercase()
+    return scheme in networkThumbnailSchemes
+  }
 
   private fun findNearestSeekThumbnail(
     source: String,
@@ -4442,26 +4461,6 @@ class PlayerViewModel(
     }
   }
 
-  /** Eco profile — minimal GPU cost, negligible battery impact. */
-  fun applyAmbientProfileEco() {
-    when (_ambientVisualMode.value) {
-      AmbientVisualMode.GLOW -> {
-        val preset = AmbientShaderPresets.glowEco
-        updateAmbientParams(
-          blurSamples = preset.blurSamples,
-          maxRadius = preset.maxRadius,
-          glowIntensity = preset.glowIntensity,
-          satBoost = preset.satBoost,
-          vignetteStrength = preset.vignetteStrength,
-          warmth = preset.warmth,
-          fadeCurve = preset.fadeCurve,
-          opacity = preset.opacity,
-        )
-      }
-      AmbientVisualMode.FRAME_EXTEND -> applyFrameExtendPreset(AmbientShaderPresets.frameExtendEco)
-    }
-  }
-
   fun updateAmbientBatterySaver(enabled: Boolean) {
     _isAmbientBatterySaver.value = enabled
     playerPreferences.ambientBatterySaver.set(enabled)
@@ -4483,7 +4482,7 @@ class PlayerViewModel(
     ambientPreBatterySaverFadeCurve = _ambientFadeCurve.value
     ambientPreBatterySaverOpacity = _ambientOpacity.value
     ambientWasOnBattery = true
-    applyAmbientProfileEco()
+    applyAmbientProfileFast()
     playerUpdate.value = PlayerUpdates.ShowText("Ambient: Battery Saver ON")
   }
 
@@ -4580,7 +4579,6 @@ class PlayerViewModel(
       val opacity = _ambientOpacity.value
 
       // ── Generate GLSL shader ───────────────────────────────────────────────
-      val ecoMode = samples <= 4
       val shaderCode = buildAmbientShader(
         sx = sx, sy = sy,
         blurSamples = samples, maxRadius = radius,
@@ -4588,7 +4586,6 @@ class PlayerViewModel(
         ditherNoise = dither, bezelDepth = bezel,
         vignetteStrength = vignette, warmth = warmth,
         fadeCurve = curve, opacity = opacity,
-        ecoMode = ecoMode,
       )
 
       // ── Shader parameter cache ─────────────────────────────────────────────
@@ -4632,7 +4629,6 @@ class PlayerViewModel(
     ditherNoise: Float, bezelDepth: Float,
     vignetteStrength: Float, warmth: Float,
     fadeCurve: Float, opacity: Float,
-    ecoMode: Boolean = false,
   ): String {
     val context = AmbientRenderContext(scaleX = sx, scaleY = sy)
     val shared =
@@ -4654,7 +4650,6 @@ class PlayerViewModel(
             satBoost = satBoost,
             warmth = warmth,
             fadeCurve = fadeCurve,
-            ecoMode = ecoMode,
           )
         AmbientVisualMode.FRAME_EXTEND ->
           AmbientFrameExtendShaderSpec(
@@ -4665,7 +4660,6 @@ class PlayerViewModel(
             detailProtection = _frameExtendDetailProtection.value,
             glowMix = _frameExtendGlowMix.value,
             ditherNoise = ditherNoise,
-            ecoMode = ecoMode,
           )
       }
 
