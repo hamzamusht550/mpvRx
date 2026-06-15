@@ -2317,7 +2317,10 @@ class PlayerActivity :
   }
 
   private fun loadFileWithMpvCommand(uri: String) {
-    lifecycleScope.launch(Dispatchers.Default) {
+    // Network stream loading is I/O-bound (DNS, connect, initial demux fetch). Use the IO
+    // dispatcher so it does not contend with the CPU-bound Default pool that decode/render
+    // helper work runs on.
+    lifecycleScope.launch(Dispatchers.IO) {
       if (!canIssueMpvCommands()) return@launch
       runCatching {
         MPVLib.setPropertyString("vid", "auto")

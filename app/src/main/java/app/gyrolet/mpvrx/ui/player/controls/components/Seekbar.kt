@@ -90,6 +90,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+/** Precomputed, allocation-free drawing data for a single skip segment overlay. */
+private data class SkipSegmentOverlay(
+  val startFraction: Float,
+  val endFraction: Float,
+  val fillColor: Color,
+  val edgeColor: Color,
+)
+
 @Composable
 fun SeekbarWithTimers(
   position: Float,
@@ -119,16 +127,18 @@ fun SeekbarWithTimers(
 
   LaunchedEffect(position, isUserInteracting) {
     if (!isUserInteracting && position != animatedPosition.value) {
-      scope.launch {
-        animatedPosition.animateTo(
-          targetValue = position,
-          animationSpec =
-            spring(
-              dampingRatio = AppMotion.Spatial.Standard.dampingRatio,
-              stiffness = AppMotion.Spatial.Standard.stiffness,
-            ),
-        )
-      }
+      // Run the animation directly in this LaunchedEffect body (not via scope.launch).
+      // When `position` changes on the next poll, the effect is cancelled and relaunched,
+      // which retargets the same Animatable smoothly instead of stacking independent
+      // spring coroutines that fight each other and leak work every ~50ms.
+      animatedPosition.animateTo(
+        targetValue = position,
+        animationSpec =
+          spring(
+            dampingRatio = AppMotion.Spatial.Standard.dampingRatio,
+            stiffness = AppMotion.Spatial.Standard.stiffness,
+          ),
+      )
     }
   }
 
@@ -275,6 +285,38 @@ private fun SeekbarContent(
       latestInteractionPosition = position
     }
   }
+
+  // Precompute skip-segment geometry fractions and colors once per (segments, duration)
+  // change instead of allocating Color objects and recomputing positions on every Canvas
+  // redraw (the overlay redraws on every position tick, ~20x/sec while scrubbing).
+  val skipSegmentOverlays =
+    remember(skipSegments, duration) {
+      if (duration <= 0f || skipSegments.isEmpty()) {
+        emptyList()
+      } else {
+        skipSegments.map { segment ->
+          val color = segment.type.accentColor
+          SkipSegmentOverlay(
+            startFraction = (segment.startSeconds / duration).toFloat().coerceIn(0f, 1f),
+            endFraction = (segment.endSeconds / duration).toFloat().coerceIn(0f, 1f),
+            fillColor =
+              Color(
+                red = color.red * 0.74f,
+                green = color.green * 0.74f,
+                blue = color.blue * 0.74f,
+                alpha = 0.42f,
+              ),
+            edgeColor =
+              Color(
+                red = color.red * 0.58f,
+                green = color.green * 0.58f,
+                blue = color.blue * 0.58f,
+                alpha = 1f,
+              ),
+          )
+        }
+      }
+    }
 
   Box(
     modifier = modifier,
@@ -429,43 +471,29 @@ private fun SeekbarContent(
             .height(overlayTrackHeight)
             .align(Alignment.Center),
       ) {
-        if (duration > 0f && skipSegments.isNotEmpty()) {
+        if (skipSegmentOverlays.isNotEmpty()) {
           val trackHeight = size.height
-          skipSegments.forEach { segment ->
-            val startX = ((segment.startSeconds / duration) * size.width).toFloat().coerceIn(0f, size.width)
-            val endX = ((segment.endSeconds / duration) * size.width).toFloat().coerceIn(0f, size.width)
+          val edgeStroke = 2.dp.toPx()
+          skipSegmentOverlays.forEach { overlay ->
+            val startX = overlay.startFraction * size.width
+            val endX = overlay.endFraction * size.width
             if (endX - startX < 1f) return@forEach
-            val color = segment.type.accentColor
-            val fillColor =
-              Color(
-                red = color.red * 0.74f,
-                green = color.green * 0.74f,
-                blue = color.blue * 0.74f,
-                alpha = 0.42f,
-              )
-            val edgeColor =
-              Color(
-                red = color.red * 0.58f,
-                green = color.green * 0.58f,
-                blue = color.blue * 0.58f,
-                alpha = 1f,
-              )
             drawRect(
-              color = fillColor,
+              color = overlay.fillColor,
               topLeft = Offset(startX, 0f),
               size = Size(endX - startX, trackHeight),
             )
             drawLine(
-              color = edgeColor,
+              color = overlay.edgeColor,
               start = Offset(startX, 0f),
               end = Offset(startX, trackHeight),
-              strokeWidth = 2.dp.toPx(),
+              strokeWidth = edgeStroke,
             )
             drawLine(
-              color = edgeColor,
+              color = overlay.edgeColor,
               start = Offset(endX, 0f),
               end = Offset(endX, trackHeight),
-              strokeWidth = 2.dp.toPx(),
+              strokeWidth = edgeStroke,
             )
           }
         }

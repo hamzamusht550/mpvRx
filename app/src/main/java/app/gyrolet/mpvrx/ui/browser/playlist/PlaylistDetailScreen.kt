@@ -596,6 +596,7 @@ private fun PlaylistVideoListContent(
   val unplayedOldVideoDays by appearancePreferences.unplayedOldVideoDays.collectAsState()
   val showExtensionField by browserPreferences.showExtensionField.collectAsState()
   val showDurationField by browserPreferences.showDurationField.collectAsState()
+  val centerGridTitles by browserPreferences.centerGridTitles.collectAsState()
   val videoCardUiConfig =
     remember(
       unlimitedNameLines,
@@ -609,6 +610,7 @@ private fun PlaylistVideoListContent(
       unplayedOldVideoDays,
       showExtensionField,
       showDurationField,
+      centerGridTitles,
     ) {
       VideoCardUiConfig(
         unlimitedNameLines = unlimitedNameLines,
@@ -622,6 +624,7 @@ private fun PlaylistVideoListContent(
         unplayedOldVideoDays = unplayedOldVideoDays,
         showExtensionField = showExtensionField,
         showDurationField = showDurationField,
+        centerGridTitles = centerGridTitles,
       )
     }
 

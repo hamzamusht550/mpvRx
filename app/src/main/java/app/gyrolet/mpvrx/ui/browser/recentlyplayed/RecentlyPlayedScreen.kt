@@ -458,6 +458,7 @@ private fun RecentItemsContent(
   val mediaLayoutMode by browserPreferences.mediaLayoutMode.collectAsState()
   val showExtensionField by browserPreferences.showExtensionField.collectAsState()
   val showDurationField by browserPreferences.showDurationField.collectAsState()
+  val centerGridTitles by browserPreferences.centerGridTitles.collectAsState()
   val manualGridColumnsEnabled by browserPreferences.manualGridColumnsEnabled.collectAsState()
   val videoGridColumnsPortrait by browserPreferences.videoGridColumnsPortrait.collectAsState()
   val videoGridColumnsLandscape by browserPreferences.videoGridColumnsLandscape.collectAsState()
@@ -501,6 +502,7 @@ private fun RecentItemsContent(
       unplayedOldVideoDays,
       showExtensionField,
       showDurationField,
+      centerGridTitles,
     ) {
       VideoCardUiConfig(
         unlimitedNameLines = unlimitedNameLines,
@@ -514,6 +516,7 @@ private fun RecentItemsContent(
         unplayedOldVideoDays = unplayedOldVideoDays,
         showExtensionField = showExtensionField,
         showDurationField = showDurationField,
+        centerGridTitles = centerGridTitles,
       )
     }
 

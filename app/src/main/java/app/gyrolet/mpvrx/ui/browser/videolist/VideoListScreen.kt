@@ -630,6 +630,7 @@ internal fun VideoListContent(
   val unplayedOldVideoDays by appearancePreferences.unplayedOldVideoDays.collectAsState()
   val showExtensionField by browserPreferences.showExtensionField.collectAsState()
   val showDurationField by browserPreferences.showDurationField.collectAsState()
+  val centerGridTitles by browserPreferences.centerGridTitles.collectAsState()
   val manualGridColumnsEnabled by browserPreferences.manualGridColumnsEnabled.collectAsState()
   val videoGridColumnsPortrait by browserPreferences.videoGridColumnsPortrait.collectAsState()
   val videoGridColumnsLandscape by browserPreferences.videoGridColumnsLandscape.collectAsState()
@@ -650,6 +651,7 @@ internal fun VideoListContent(
       unplayedOldVideoDays,
       showExtensionField,
       showDurationField,
+      centerGridTitles,
     ) {
       VideoCardUiConfig(
         unlimitedNameLines = unlimitedNameLines,
@@ -663,6 +665,7 @@ internal fun VideoListContent(
         unplayedOldVideoDays = unplayedOldVideoDays,
         showExtensionField = showExtensionField,
         showDurationField = showDurationField,
+        centerGridTitles = centerGridTitles,
       )
     }
 

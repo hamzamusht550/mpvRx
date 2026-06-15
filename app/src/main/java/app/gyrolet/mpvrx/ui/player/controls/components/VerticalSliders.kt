@@ -142,7 +142,7 @@ fun BrightnessSlider(
   negativeRange: ClosedFloatingPointRange<Float>,
   modifier: Modifier = Modifier,
 ) {
-  val coercedBrightness = brightness.coerceIn(negativeRange.start, positiveRange.endInclusive)
+  val coercedBrightness = brightness.coerceIn(-negativeRange.endInclusive, positiveRange.endInclusive)
   Surface(
     modifier = modifier,
     shape = AppShapeScale.extraLarge,

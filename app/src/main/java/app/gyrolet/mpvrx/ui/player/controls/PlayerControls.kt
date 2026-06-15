@@ -1344,6 +1344,10 @@ fun PlayerControls(
             } else {
               precisePosition
             }
+          // Memoize the immutable copies so they are not reallocated on every position
+          // tick (this scope recomposes ~20x/sec while scrubbing).
+          val chaptersImmutable = remember(chapters) { chapters.toImmutableList() }
+          val skipSegmentsImmutable = remember(skipSegments) { skipSegments.toImmutableList() }
 
           SeekbarWithTimers(
             position = displayedSeekbarPosition,
@@ -1372,8 +1376,8 @@ fun PlayerControls(
               playerPreferences.invertDuration.set(!invertDuration)
             },
             positionTimerOnClick = {},
-            chapters = chapters.toImmutableList(),
-            skipSegments = skipSegments.toImmutableList(),
+            chapters = chaptersImmutable,
+            skipSegments = skipSegmentsImmutable,
             paused = paused ?: false,
             seekbarStyle = seekbarStyle,
             loopStart = abLoopA?.toFloat(),

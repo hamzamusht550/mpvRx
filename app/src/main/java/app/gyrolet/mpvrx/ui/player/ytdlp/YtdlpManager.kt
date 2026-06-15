@@ -14,6 +14,14 @@ object YtdlpManager {
     private const val TAG = "YtdlpManager"
     private const val YTDL_DIR = "ytdl"
 
+    // Lua patterns (ytdl_hook `exclude` syntax, `|`-separated) for direct media/manifest
+    // URLs that must skip yt-dlp and go straight to mpv/ffmpeg's native demuxers. `%.`
+    // escapes the dot in a Lua pattern; each entry matches the extension anywhere in the URL
+    // so tokenized query strings (…/index.m3u8?token=…) are still excluded.
+    private const val DIRECT_MEDIA_EXCLUDE =
+        "%.m3u8|%.m3u|%.mpd|%.mp4|%.m4v|%.mkv|%.webm|%.ts|%.m2ts|%.mov|%.avi|" +
+            "%.flv|%.wmv|%.mp3|%.m4a|%.aac|%.flac|%.wav|%.ogg|%.opus"
+
     fun getYtdlDir(context: Context): File {
         return File(context.filesDir, YTDL_DIR).apply { if (!exists()) mkdirs() }
     }
@@ -117,6 +125,7 @@ object YtdlpManager {
                 ytdl_path=$ytdlBinaryPath
                 all_formats=yes
                 all_subtitles=yes
+                exclude=$DIRECT_MEDIA_EXCLUDE
             """.trimIndent()
             ytdlConf.writeText(confContent)
             Log.d(TAG, "Created ytdl_hook.conf at ${ytdlConf.absolutePath}")
@@ -133,6 +142,11 @@ object YtdlpManager {
         MPVLib.setOptionString("script-opts-append", "ytdl_hook-ytdl_path=$ytdlBinaryPath")
         MPVLib.setOptionString("script-opts-append", "ytdl_hook-all_formats=yes")
         MPVLib.setOptionString("script-opts-append", "ytdl_hook-all_subtitles=yes")
+        // Skip yt-dlp for direct media/manifest URLs (.m3u8/.mpd/.mp4/.ts/...). Without this,
+        // ytdl_hook intercepts every http(s) URL and routes it through yt-dlp's generic
+        // extractor, which chokes on tokenized HLS/CDN links — so mpv never falls back to
+        // ffmpeg's native HLS demuxer and playback fails (while MX Player/VLC play it fine).
+        MPVLib.setOptionString("script-opts-append", "ytdl_hook-exclude=$DIRECT_MEDIA_EXCLUDE")
         
         val customYtdlFormat = ytdlPreferences.ytdlFormat.get()
         val ytdlFormat = customYtdlFormat.ifBlank { resolvedOptions.format }

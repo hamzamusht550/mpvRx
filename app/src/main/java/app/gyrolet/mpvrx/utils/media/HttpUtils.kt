@@ -136,6 +136,16 @@ object HttpUtils {
     return isLikelyJunkTitle(fallbackTitle) || !hasDirectMediaExtension(uri)
   }
 
+  /**
+   * True when [uri] is a network stream that points directly at a media/manifest file
+   * (e.g. .m3u8/.mpd/.mp4/.ts). Such URLs should bypass yt-dlp and be handed straight to
+   * mpv/ffmpeg's native demuxers, exactly like a dedicated player (MX Player/VLC) would.
+   */
+  fun isDirectMediaUrl(uri: Uri?): Boolean {
+    if (uri == null || !isNetworkStream(uri)) return false
+    return hasDirectMediaExtension(uri)
+  }
+
   private fun hasDirectMediaExtension(uri: Uri): Boolean {
     val lastSegment = uri.lastPathSegment?.substringAfterLast('/')?.let(Uri::decode).orEmpty()
     if (lastSegment.isBlank()) return false

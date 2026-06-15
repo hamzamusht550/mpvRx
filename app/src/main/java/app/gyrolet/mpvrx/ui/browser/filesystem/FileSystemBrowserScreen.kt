@@ -1175,6 +1175,7 @@ private fun FileSystemBrowserContent(
   val unplayedOldVideoDays by appearancePreferences.unplayedOldVideoDays.collectAsState()
   val showExtensionField by browserPreferences.showExtensionField.collectAsState()
   val showDurationField by browserPreferences.showDurationField.collectAsState()
+  val centerGridTitles by browserPreferences.centerGridTitles.collectAsState()
   val videoCardUiConfig =
     remember(
       unlimitedNameLines,
@@ -1188,6 +1189,7 @@ private fun FileSystemBrowserContent(
       unplayedOldVideoDays,
       showExtensionField,
       showDurationField,
+      centerGridTitles,
     ) {
       VideoCardUiConfig(
         unlimitedNameLines = unlimitedNameLines,
@@ -1201,6 +1203,7 @@ private fun FileSystemBrowserContent(
         unplayedOldVideoDays = unplayedOldVideoDays,
         showExtensionField = showExtensionField,
         showDurationField = showDurationField,
+        centerGridTitles = centerGridTitles,
       )
     }
 
@@ -1559,6 +1562,7 @@ private fun FileSystemSearchContent(
   val unplayedOldVideoDays by appearancePreferences.unplayedOldVideoDays.collectAsState()
   val showExtensionField by browserPreferences.showExtensionField.collectAsState()
   val showDurationField by browserPreferences.showDurationField.collectAsState()
+  val centerGridTitles by browserPreferences.centerGridTitles.collectAsState()
   val videoCardUiConfig =
     remember(
       unlimitedNameLines,
@@ -1572,6 +1576,7 @@ private fun FileSystemSearchContent(
       unplayedOldVideoDays,
       showExtensionField,
       showDurationField,
+      centerGridTitles,
     ) {
       VideoCardUiConfig(
         unlimitedNameLines = unlimitedNameLines,
@@ -1585,6 +1590,7 @@ private fun FileSystemSearchContent(
         unplayedOldVideoDays = unplayedOldVideoDays,
         showExtensionField = showExtensionField,
         showDurationField = showDurationField,
+        centerGridTitles = centerGridTitles,
       )
     }
 

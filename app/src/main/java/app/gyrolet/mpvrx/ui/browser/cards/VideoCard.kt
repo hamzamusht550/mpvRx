@@ -70,6 +70,7 @@ data class VideoCardUiConfig(
   val unplayedOldVideoDays: Int,
   val showExtensionField: Boolean = true,
   val showDurationField: Boolean = true,
+  val centerGridTitles: Boolean = false,
 )
 
 @Composable
@@ -108,6 +109,7 @@ fun VideoCard(
       unplayedOldVideoDays = appearancePreferences.unplayedOldVideoDays.collectAsState().value,
       showExtensionField = browserPreferences.showExtensionField.collectAsState().value,
       showDurationField = browserPreferences.showDurationField.collectAsState().value,
+      centerGridTitles = browserPreferences.centerGridTitles.collectAsState().value,
     )
   val maxLines = if (resolvedUiConfig.unlimitedNameLines) Int.MAX_VALUE else 2
 
@@ -163,7 +165,7 @@ fun VideoCard(
       }
 
       if (isGridMode) {
-        val centerGridTitles by browserPreferences.centerGridTitles.collectAsState()
+        val centerGridTitles = resolvedUiConfig.centerGridTitles
         val horizontalAlignment = if (gridColumns == 1) {
           Alignment.Start
         } else {
