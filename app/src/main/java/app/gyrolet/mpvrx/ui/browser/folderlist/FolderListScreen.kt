@@ -1315,20 +1315,18 @@ private suspend fun searchFoldersAndVideos(
   context: Context,
   query: String,
 ): List<FileSystemItem> {
-
   val results = mutableListOf<FileSystemItem>()
 
   try {
     Log.d("FolderListScreen", "Searching for: $query")
 
-    // Get all search matches
-    val matches = SearchManager.engine.search(query, limit=50)
+    // Fetch matches from the pre-built index
+    val matches = SearchManager.engine.search(query, limit = 50)
 
     for (item in matches) {
-
       when (item) {
-
-        is MediaSearchEngine.Folder -> {
+        // item is automatically smart-cast to VideoFolder
+        is VideoFolder -> {
           results.add(
             FileSystemItem.Folder(
               name = item.name,
@@ -1340,8 +1338,8 @@ private suspend fun searchFoldersAndVideos(
             )
           )
         }
-
-        is MediaSearchEngine.Video -> {
+        // item is automatically smart-cast to Video
+        is Video -> {
           results.add(
             FileSystemItem.VideoFile(
               name = item.displayName,
@@ -1355,12 +1353,9 @@ private suspend fun searchFoldersAndVideos(
     }
 
     Log.d("FolderListScreen", "Found ${results.size} results for: $query")
-
   } catch (e: Exception) {
     Log.e("FolderListScreen", "Error searching folders and videos", e)
   }
 
   return results
 }
-
-
