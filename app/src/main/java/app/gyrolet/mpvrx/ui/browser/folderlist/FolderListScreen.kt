@@ -74,6 +74,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.util.Log
 import app.gyrolet.mpvrx.domain.browser.FileSystemItem
+import app.gyrolet.mpvrx.domain.media.model.Video
 import app.gyrolet.mpvrx.domain.media.model.VideoFolder
 import app.gyrolet.mpvrx.preferences.AppearancePreferences
 import app.gyrolet.mpvrx.preferences.BrowserPreferences
@@ -1316,16 +1317,15 @@ private suspend fun searchFoldersAndVideos(
   query: String,
 ): List<FileSystemItem> {
   val results = mutableListOf<FileSystemItem>()
-
   try {
     Log.d("FolderListScreen", "Searching for: $query")
-
-    // Fetch matches from the pre-built index
+    
+    // Get all search matches from the optimized engine
     val matches = SearchManager.engine.search(query, limit = 50)
 
     for (item in matches) {
       when (item) {
-        // item is automatically smart-cast to VideoFolder
+        // Kotlin smart-casts 'item' to your domain model VideoFolder
         is VideoFolder -> {
           results.add(
             FileSystemItem.Folder(
@@ -1338,7 +1338,7 @@ private suspend fun searchFoldersAndVideos(
             )
           )
         }
-        // item is automatically smart-cast to Video
+        // Kotlin smart-casts 'item' to your domain model Video
         is Video -> {
           results.add(
             FileSystemItem.VideoFile(
@@ -1356,6 +1356,8 @@ private suspend fun searchFoldersAndVideos(
   } catch (e: Exception) {
     Log.e("FolderListScreen", "Error searching folders and videos", e)
   }
-
   return results
 }
+
+
+
