@@ -1079,12 +1079,8 @@ fun PlayerControls(
             Modifier.constrainAs(playerPauseButton) {
               end.linkTo(parent.absoluteRight)
               start.linkTo(parent.absoluteLeft)
-              if (isPortrait) {
-                bottom.linkTo(bottomRightControls.top, spacing.medium) // Reduced from large
-              } else {
-                top.linkTo(parent.top)
-                bottom.linkTo(parent.bottom)
-              }
+              top.linkTo(parent.top)
+              bottom.linkTo(parent.bottom)
             },
         ) {
           val showLoadingCircle by playerPreferences.showLoadingCircle.collectAsState()
@@ -1327,8 +1323,8 @@ fun PlayerControls(
                 }
               )
               .constrainAs(seekbar) {
-                if (isPortrait && controlsShown) {
-                  bottom.linkTo(playerPauseButton.top, spacing.medium)
+                if (isPortrait) {
+                  bottom.linkTo(bottomRightControls.top, spacing.medium)
                 } else {
                   bottom.linkTo(parent.bottom, spacing.medium)
                 }
