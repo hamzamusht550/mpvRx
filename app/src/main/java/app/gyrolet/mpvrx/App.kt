@@ -9,28 +9,21 @@ import app.gyrolet.mpvrx.di.PreferencesModule
 import app.gyrolet.mpvrx.presentation.crash.CrashActivity
 import app.gyrolet.mpvrx.presentation.crash.GlobalExceptionHandler
 import app.gyrolet.mpvrx.utils.media.MediaLibraryEvents
-import io.github.rosemoe.sora.langs.textmate.registry.FileProviderRegistry
-import io.github.rosemoe.sora.langs.textmate.registry.GrammarRegistry
-import io.github.rosemoe.sora.langs.textmate.registry.ThemeRegistry
-import io.github.rosemoe.sora.langs.textmate.registry.model.ThemeModel
-import io.github.rosemoe.sora.langs.textmate.registry.provider.AssetsFileResolver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import org.eclipse.tm4e.core.registry.IThemeSource
-import org.koin.android.ext.android.inject
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import org.koin.core.annotation.KoinExperimentalAPI
 import app.gyrolet.mpvrx.preferences.PlayerPreferences
 import android.content.ComponentName
 import android.content.pm.PackageManager
+import org.koin.core.context.GlobalContext
 
 @OptIn(KoinExperimentalAPI::class)
 class App : Application() {
   private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-  private val metadataCache: VideoMetadataCacheRepository by inject()
 
   companion object {
     private const val LAUNCH_SCAN_PREFS = "launch_media_scan"
@@ -56,7 +49,7 @@ class App : Application() {
 
     applicationScope.launch {
       runCatching {
-        val preferences: PlayerPreferences by inject()
+        val preferences: PlayerPreferences = getKoin().get()
         val enableMediaInfo = preferences.enableMediaInfoIntent.get()
         val componentName = ComponentName(this@App, "app.gyrolet.mpvrx.ui.mediainfo.MediaInfoActivityAlias")
         val newState = if (enableMediaInfo) {
@@ -74,16 +67,24 @@ class App : Application() {
       }
     }
 
-    // Perform cache maintenance on app startup (non-blocking)
+    // Perform cache maintenance on app startup (non-blocking).
+    // Resolve the repository lazily inside the coroutine so Room DB construction
+    // (which registers 8 migrations and opens the SQLite file) happens on the
+    // background dispatcher instead of contending with first-frame work on the
+    // main thread. See issue 1.1 in the startup audit.
     applicationScope.launch {
       runCatching {
+        val metadataCache: VideoMetadataCacheRepository = getKoin().get()
         metadataCache.performMaintenance()
       }
     }
 
-    applicationScope.launch {
-      initializeScriptEditorAssets()
-    }
+    // Note: TextMate grammar/theme assets for the script editor are no longer
+    // pre-loaded here. They are initialized lazily on first use by
+    // ScriptEditorTextMate.ensureInitialized() in MpvScriptEditor.kt, which
+    // already has a thread-safe double-checked init. Loading them on every
+    // cold start wasted I/O + JSON parse time for a feature most users never
+    // open. See issue 1.2 in the startup audit.
 
     applicationScope.launch {
       runCatching {
@@ -91,6 +92,13 @@ class App : Application() {
       }
     }
   }
+
+  /**
+   * Resolves [org.koin.core.Koin] from the global context. Safe to call only
+   * after [startKoin] has completed (which it has, synchronously, at the top
+   * of [onCreate]).
+   */
+  private fun getKoin() = GlobalContext.get()
 
   private fun triggerMediaScanOnLaunch() {
     try {
@@ -127,29 +135,5 @@ class App : Application() {
     return true
   }
 
-  private fun initializeScriptEditorAssets() {
-    runCatching {
-      FileProviderRegistry.getInstance().addFileProvider(AssetsFileResolver(assets))
-      GrammarRegistry.getInstance().loadGrammars("textmate/languages.json")
-
-      val themeRegistry = ThemeRegistry.getInstance()
-      listOf("darcula", "quietlight").forEach { themeName ->
-        val path = "textmate/$themeName.json"
-        themeRegistry.loadTheme(
-          ThemeModel(
-            IThemeSource.fromInputStream(
-              FileProviderRegistry.getInstance().tryGetInputStream(path),
-              path,
-              null,
-            ),
-            themeName,
-          ),
-        )
-      }
-      themeRegistry.setTheme("darcula")
-    }.onFailure { error ->
-      Log.w("App", "Failed to initialize script editor assets", error)
-    }
-  }
 }
 

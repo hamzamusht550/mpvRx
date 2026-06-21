@@ -121,6 +121,14 @@ class MainActivity : ComponentActivity() {
   private val networkRepository by inject<NetworkRepository>()
   private var appliedEdgeToEdgeDarkMode: Boolean? = null
 
+  /**
+   * Per-process flag that ensures auto-connect only runs once per cold start,
+   * even if MainActivity is recreated (config change, process death + restore,
+   * etc.). See issue 1.6 in the startup audit.
+   */
+  @Volatile
+  private var autoConnectTriggered: Boolean = false
+
   // Create a coroutine scope tied to the activity lifecycle
   private val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -161,9 +169,17 @@ class MainActivity : ComponentActivity() {
         applyEdgeToEdge(isDarkMode)
       }
 
-      // Auto-connect to saved network connections
+      // Auto-connect to saved network connections.
+      // Gated behind both the user setting and a per-process flag so we only
+      // run SMB/FTP/WebDAV handshakes once per cold start, and only after the
+      // first frame has drawn (post-delay(500)). Previously this fired on every
+      // MainActivity recreation (config change, process restart, etc.) and
+      // re-handshaked every auto-connect entry, wasting battery and bandwidth
+      // even if the user never opened the Network tab.
+      // See issue 1.6 in the startup audit.
       LaunchedEffect(networkStreamingEnabled) {
-        if (networkStreamingEnabled) {
+        if (networkStreamingEnabled && !autoConnectTriggered) {
+          autoConnectTriggered = true
           autoConnectToNetworks()
         }
       }

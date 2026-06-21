@@ -286,10 +286,30 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     init {
-        // Only initialize auto-update if feature is enabled
+        // Only initialize auto-update if feature is enabled.
+        // The network check is deferred by a short delay so that it does not
+        // race with first-frame composition of the main UI. Previously the
+        // check fired synchronously inside the init block of the ViewModel,
+        // which is itself constructed during the very first Compose
+        // composition in MainActivity.Navigator() -- meaning the OkHttp
+        // client + GitHub API call competed with cold-start rendering.
+        // See issue 1.5 in the startup audit.
         if (BuildConfig.ENABLE_UPDATE_FEATURE && isAutoUpdateEnabled.value) {
-            checkForUpdate(manual = false)
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(UPDATE_CHECK_STARTUP_DELAY_MS)
+                checkForUpdate(manual = false)
+            }
         }
+    }
+
+    private companion object {
+        /**
+         * Delay before the auto-update network check fires after the
+         * UpdateViewModel is constructed. Long enough to let the first frame
+         * draw and the main navigation settle, short enough that the update
+         * dialog (if any) still appears within a few seconds of cold start.
+         */
+        private const val UPDATE_CHECK_STARTUP_DELAY_MS = 1500L
     }
 
     sealed class UpdateState {
