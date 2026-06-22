@@ -1701,7 +1701,8 @@ class PlayerViewModel(
     )
   }
 
-  fun stopRealtimeSubtitles() {
+  fun stopRealtimeSubtitles(showToastMessage: Boolean = true) {
+    val wasActive = _isRealtimeSubsActive.value
     realtimeSubtitleService.stop()
     _isRealtimeSubsActive.value = false
     _realtimeSubsLanguage.value = ""
@@ -1710,7 +1711,9 @@ class PlayerViewModel(
     realtimeSrtFile?.delete()
     realtimeSrtFile = null
     realtimeSrtFileAdded = false
-    showToast("Real-time subtitles stopped")
+    if (showToastMessage && wasActive) {
+      showToast("Real-time subtitles stopped")
+    }
   }
 
   private var realtimeSrtFileAdded = false
@@ -3264,11 +3267,11 @@ class PlayerViewModel(
       VideoAspect.Fit -> {
         // To FIT: Reset both properties to their defaults.
         MPVLib.setPropertyDouble("panscan", 0.0)
-        MPVLib.setPropertyDouble("video-aspect-override", -1.0)
+        MPVLib.setPropertyString("video-aspect-override", "no")
       }
       VideoAspect.Crop -> {
         // To CROP: Reset aspect override first, then set panscan
-        MPVLib.setPropertyDouble("video-aspect-override", -1.0)
+        MPVLib.setPropertyString("video-aspect-override", "no")
         MPVLib.setPropertyDouble("panscan", 1.0)
       }
       VideoAspect.Stretch -> {
@@ -4673,7 +4676,7 @@ class PlayerViewModel(
     // Stop the realtime subtitle service and delete its temp .srt file.
     // Without this the file lingers in cacheDir until the system reclaims
     // it, and the service may keep an active session open.
-    runCatching { stopRealtimeSubtitles() }
+    runCatching { stopRealtimeSubtitles(showToastMessage = false) }
 
     // Evict all cached Bitmaps from the seek-thumbnail LruCache so the
     // memory is returned immediately rather than waiting for the next GC

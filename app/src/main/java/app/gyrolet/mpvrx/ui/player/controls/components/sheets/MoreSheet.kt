@@ -205,23 +205,32 @@ fun MoreSheet(
       LazyRow(
         horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.smaller),
       ) {
-        items(7) { page ->
+        items(8) { page ->
           FilterChip(
             label = {
               Text(
-                stringResource(
-                  if (page ==
-                    0
-                  ) {
-                    R.string.player_sheets_tracks_off
-                  } else {
-                    R.string.player_sheets_stats_page_chip
-                  },
-                  page,
-                ),
+                if (page == 7) {
+                  "Console"
+                } else {
+                  stringResource(
+                    if (page == 0) {
+                      R.string.player_sheets_tracks_off
+                    } else {
+                      R.string.player_sheets_stats_page_chip
+                    },
+                    page,
+                  )
+                }
               )
             },
             onClick = {
+              val isConsoleOpen = MPVLib.getPropertyBoolean("user-data/mpv/console/open") == true
+              
+              // If we are choosing any page OTHER than Console, close the console if it's currently open
+              if (page != 7 && isConsoleOpen) {
+                MPVLib.command("script-message-to", "console", "disable")
+              }
+              
               when (page) {
                 0 -> {
                   if (statisticsPage in 1..5) MPVLib.command("script-binding", "stats/display-stats-toggle")
@@ -229,8 +238,17 @@ fun MoreSheet(
                 6 -> {
                   if (statisticsPage in 1..5) MPVLib.command("script-binding", "stats/display-stats-toggle")
                 }
+                7 -> {
+                  if (statisticsPage in 1..5) MPVLib.command("script-binding", "stats/display-stats-toggle")
+                  // Enable console only if it is not already open
+                  if (!isConsoleOpen) {
+                    MPVLib.command("script-message-to", "console", "enable")
+                  }
+                }
                 else -> {
-                  if (statisticsPage == 0 || statisticsPage == 6) MPVLib.command("script-binding", "stats/display-stats-toggle")
+                  if (statisticsPage == 0 || statisticsPage == 6 || statisticsPage == 7) {
+                    MPVLib.command("script-binding", "stats/display-stats-toggle")
+                  }
                   MPVLib.command("script-binding", "stats/display-page-$page")
                 }
               }

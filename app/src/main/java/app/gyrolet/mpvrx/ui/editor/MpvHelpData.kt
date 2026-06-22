@@ -114,7 +114,7 @@ object MpvHelpData {
         option("video-sync-max-video-change", "<number>", "Maximum video speed adjustment for sync."),
         option("video-rotate", "<0|90|180|270>", "Force video rotation."),
         option("video-stereo-mode", "<no|mode>", "Set stereo 3D conversion mode (e.g. mono, left_right, top_bottom)."),
-        option("video-aspect-override", "<ratio|-1>", "Override aspect ratio. -1 = disable."),
+        option("video-aspect-override", "<ratio|no>", "Override aspect ratio. 'no' = disable."),
         option("video-unscaled", "<no|yes|downscale-big>", "Disable video scaling. 'downscale-big' only downscales when the video is larger than the window."),
         option("video-pan-x", "<number>", "Pan the video horizontally (in fractions of the display)."),
         option("video-pan-y", "<number>", "Pan the video vertically."),

@@ -885,6 +885,9 @@ fun RenderPlayerButton(
             indication = ripple(bounded = true),
             onClick = {
               clickEvent()
+              if (MPVLib.getPropertyBoolean("user-data/mpv/console/open") == true) {
+                MPVLib.command("script-message-to", "console", "disable")
+              }
               if (statisticsPage == 6) {
                 advancedPreferences.enabledStatisticsPage.set(0)
               } else {

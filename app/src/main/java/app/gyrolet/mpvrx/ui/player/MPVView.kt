@@ -299,6 +299,8 @@ class MPVView(
       "user-data/mpvrx/curl_request" to MPVLib.MpvFormat.MPV_FORMAT_STRING,
       // curl_response is written by the bridge; scripts observe this property for results
       "user-data/mpvrx/curl_response" to MPVLib.MpvFormat.MPV_FORMAT_STRING,
+      // Track console visibility state
+      "user-data/mpv/console/open" to MPVLib.MpvFormat.MPV_FORMAT_FLAG,
     )
 
   private fun setupAudioOptions() {

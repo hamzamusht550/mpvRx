@@ -184,7 +184,7 @@ object MpvAutoCompleteProvider {
             configOption("video-rotate", "<0|90|180|270>", "Force video rotation."),
             configOption("video-zoom", "<number>", "Video zoom level."),
             configOption("video-unscaled", "<no|yes|downscale-big>", "Disable video scaling."),
-            configOption("video-aspect-override", "<ratio|-1>", "Override aspect ratio."),
+            configOption("video-aspect-override", "<ratio|no>", "Override aspect ratio."),
             configOption("video-align-x", "<-1..1>", "Horizontal video alignment."),
             configOption("video-align-y", "<-1..1>", "Vertical video alignment."),
             configOption("video-pan-x", "<number>", "Pan video horizontally."),

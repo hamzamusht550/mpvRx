@@ -10,6 +10,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -422,9 +423,9 @@ class IntroDbRepository(
     episode: Int?,
   ): Result<List<IntroDbSegment>> = withContext(Dispatchers.IO) {
     runCatching {
-      val escapedName = showName.replace("\\", "\\\\").replace("\"", "\\\"")
-      val gqlQuery = """{searchShows(search: "$escapedName", limit: 3) {id name episodes {id season number timestamps {at type {name}}}}}"""
-      val requestBody = """{"query":"$gqlQuery"}""".toRequestBody(JSON_MEDIA_TYPE)
+      val searchArg = json.encodeToString(JsonPrimitive(showName))
+      val gqlQuery = "{searchShows(search: $searchArg, limit: 3) {id name episodes {id season number timestamps {at type {name}}}}}"
+      val requestBody = json.encodeToString(JsonObject(mapOf("query" to JsonPrimitive(gqlQuery)))).toRequestBody(JSON_MEDIA_TYPE)
 
       val request =
         Request
@@ -437,10 +438,13 @@ class IntroDbRepository(
 
       val responseBody =
         client.newCall(request).execute().use { response ->
+          val body = response.body.string()
           if (!response.isSuccessful) {
-            error("Anime Skip request failed with HTTP ${response.code}")
+            val details = body.take(300)
+            Log.w(TAG, "Anime Skip API returned HTTP ${response.code}: $details")
+            error("Anime Skip request failed with HTTP ${response.code}: $details")
           }
-          response.body.string()
+          body
         }
 
       if (responseBody.isBlank()) return@runCatching emptyList()

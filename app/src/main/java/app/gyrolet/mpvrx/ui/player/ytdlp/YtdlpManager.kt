@@ -124,7 +124,6 @@ object YtdlpManager {
             val confContent = """
                 ytdl_path=$ytdlBinaryPath
                 all_formats=yes
-                all_subtitles=yes
                 exclude=$DIRECT_MEDIA_EXCLUDE
             """.trimIndent()
             ytdlConf.writeText(confContent)
@@ -141,7 +140,6 @@ object YtdlpManager {
         MPVLib.setOptionString("script-opts-append", "ytdl_hook-path=$ytdlBinaryPath")
         MPVLib.setOptionString("script-opts-append", "ytdl_hook-ytdl_path=$ytdlBinaryPath")
         MPVLib.setOptionString("script-opts-append", "ytdl_hook-all_formats=yes")
-        MPVLib.setOptionString("script-opts-append", "ytdl_hook-all_subtitles=yes")
         // Skip yt-dlp for direct media/manifest URLs (.m3u8/.mpd/.mp4/.ts/...). Without this,
         // ytdl_hook intercepts every http(s) URL and routes it through yt-dlp's generic
         // extractor, which chokes on tokenized HLS/CDN links — so mpv never falls back to
