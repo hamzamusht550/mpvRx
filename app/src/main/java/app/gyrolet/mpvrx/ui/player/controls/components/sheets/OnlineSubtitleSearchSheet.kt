@@ -188,63 +188,82 @@ fun OnlineSubtitleSearchSheet(
         }
 
 
-        OutlinedTextField(
-          value = searchQuery,
-          onValueChange = { 
-            searchQuery = it
-          },
+        Row(
           modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = MaterialTheme.spacing.medium, vertical = MaterialTheme.spacing.extraSmall),
-          placeholder = { Text(stringResource(R.string.pref_subtitles_search_online)) },
-          leadingIcon = {
-            IconButton(onClick = { 
-              searchQuery = mediaInfo.title
-              onSearchMedia(mediaInfo.title)
-            }) {
-              Icon(Icons.Default.AutoFixHigh, null, tint = MaterialTheme.colorScheme.primary)
-            }
-          },
-          trailingIcon = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              if (searchQuery.isNotEmpty()) {
-                IconButton(onClick = { 
-                  searchQuery = ""
-                  onClearMediaSelection()
-                }) {
-                  Icon(Icons.Default.Close, null)
-                }
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.small),
+        ) {
+          OutlinedTextField(
+            value = searchQuery,
+            onValueChange = {
+              searchQuery = it
+            },
+            modifier = Modifier.weight(1f),
+            placeholder = { Text(stringResource(R.string.pref_subtitles_search_online)) },
+            leadingIcon = {
+              IconButton(onClick = {
+                searchQuery = mediaInfo.title
+                onSearchMedia(mediaInfo.title)
+              }) {
+                Icon(Icons.Default.AutoFixHigh, null, tint = MaterialTheme.colorScheme.primary)
               }
-              if (aiPreferences.enabled.get() && aiPreferences.subtitleFormatWithAi.get()) {
-                if (isAiFormatting) {
-                  CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                  Spacer(Modifier.width(4.dp))
-                } else {
-                  IconButton(onClick = { formatWithAi() }) {
-                    Icon(Icons.Default.AutoAwesome, "Format with AI", tint = MaterialTheme.colorScheme.tertiary)
+            },
+            trailingIcon = {
+              Row(verticalAlignment = Alignment.CenterVertically) {
+                if (searchQuery.isNotEmpty()) {
+                  IconButton(onClick = {
+                    searchQuery = ""
+                    onClearMediaSelection()
+                  }) {
+                    Icon(Icons.Default.Close, null)
                   }
                 }
+                if (aiPreferences.enabled.get() && aiPreferences.subtitleFormatWithAi.get()) {
+                  if (isAiFormatting) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(4.dp))
+                  } else {
+                    IconButton(onClick = { formatWithAi() }) {
+                      Icon(Icons.Default.AutoAwesome, "Format with AI", tint = MaterialTheme.colorScheme.tertiary)
+                    }
+                  }
+                }
+                if (isSearching || isDownloading || isSearchingMedia) {
+                  CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                  Spacer(Modifier.width(8.dp))
+                }
+                IconButton(onClick = { runSearch() }) {
+                  Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.primary)
+                }
               }
-              if (isSearching || isDownloading || isSearchingMedia) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(8.dp))
-              }
-              IconButton(onClick = { runSearch() }) {
-                Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.primary)
-              }
-            }
-          },
-          singleLine = true,
-          keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-          keyboardActions = KeyboardActions(onSearch = { runSearch() }),
-          shape = RoundedCornerShape(12.dp),
-          colors = TextFieldDefaults.colors(
-            focusedContainerColor = Color.Transparent,
-            unfocusedContainerColor = Color.Transparent,
-            focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-            unfocusedIndicatorColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { runSearch() }),
+            shape = RoundedCornerShape(12.dp),
+            colors = TextFieldDefaults.colors(
+              focusedContainerColor = Color.Transparent,
+              unfocusedContainerColor = Color.Transparent,
+              focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+              unfocusedIndicatorColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+            )
           )
-        )
+
+          if (showWyzieSelection && selectedTvShow != null) {
+            SeriesSelectionControls(
+              tvShow = selectedTvShow,
+              selectedSeason = selectedSeason,
+              onSelectSeason = onSelectSeason,
+              isFetchingEpisodes = isFetchingEpisodes,
+              episodes = seasonEpisodes,
+              selectedEpisode = selectedEpisode,
+              onSelectEpisode = onSelectEpisode,
+              onClose = onClearMediaSelection,
+            )
+          }
+        }
 
         // Autocomplete Results - Horizontal Scrollable
         if (showWyzieSelection && mediaSearchResults.isNotEmpty()) {
@@ -283,20 +302,6 @@ fun OnlineSubtitleSearchSheet(
           }
         }
 
-        // Series / Season / Episode Selection UI
-        if (showWyzieSelection && selectedTvShow != null) {
-          SeriesDetailsSection(
-            tvShow = selectedTvShow,
-            isFetchingSeasons = isFetchingTvDetails,
-            selectedSeason = selectedSeason,
-            onSelectSeason = onSelectSeason,
-            isFetchingEpisodes = isFetchingEpisodes,
-            episodes = seasonEpisodes,
-            selectedEpisode = selectedEpisode,
-            onSelectEpisode = onSelectEpisode,
-            onClose = onClearMediaSelection
-          )
-        }
       }
       if (isSearching) {
         LinearProgressIndicator(
@@ -776,9 +781,8 @@ private fun tmdbPosterUrl(
 }
 
 @Composable
-fun SeriesDetailsSection(
+private fun SeriesSelectionControls(
     tvShow: app.gyrolet.mpvrx.repository.wyzie.WyzieTvShowDetails,
-    isFetchingSeasons: Boolean,
     selectedSeason: app.gyrolet.mpvrx.repository.wyzie.WyzieSeason?,
     onSelectSeason: (app.gyrolet.mpvrx.repository.wyzie.WyzieSeason) -> Unit,
     isFetchingEpisodes: Boolean,
@@ -787,138 +791,117 @@ fun SeriesDetailsSection(
     onSelectEpisode: (app.gyrolet.mpvrx.repository.wyzie.WyzieEpisode) -> Unit,
     onClose: () -> Unit
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = MaterialTheme.spacing.medium)
-            .padding(bottom = MaterialTheme.spacing.small),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+    Row(
+        modifier = Modifier.height(56.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+        val seasonDropdownExpanded = remember { mutableStateOf(false) }
+        Box {
+            FilledTonalButton(
+                onClick = { seasonDropdownExpanded.value = true },
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                modifier = Modifier.height(48.dp).widthIn(min = 68.dp),
+                shape = RoundedCornerShape(10.dp),
             ) {
                 Text(
-                    text = tvShow.name,
-                    style = MaterialTheme.typography.titleSmall,
+                    text = selectedSeason?.let { "S${it.season_number}" } ?: "Season",
+                    style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
                 )
-
-                // Season Dropdown
-                val seasonDropdownExpanded = remember { mutableStateOf(false) }
-                Box {
-                  FilledTonalButton(
-                      onClick = { seasonDropdownExpanded.value = true },
-                      contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                      modifier = Modifier.height(38.dp),
-                      shape = RoundedCornerShape(8.dp)
-                  ) {
-                      Text(
-                          text = selectedSeason?.let { "S${it.season_number}" } ?: "Season",
-                          style = MaterialTheme.typography.labelLarge,
-                          fontWeight = FontWeight.Bold,
-                          maxLines = 1
-                      )
-                      Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(20.dp))
-                  }
-                  DropdownMenu(
-                      expanded = seasonDropdownExpanded.value,
-                      onDismissRequest = { seasonDropdownExpanded.value = false },
-                      modifier = Modifier.heightIn(max = 300.dp),
-                      shape = RoundedCornerShape(12.dp),
-                      containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                  ) {
-                      tvShow.seasons.forEach { season ->
-                          DropdownMenuItem(
-                              text = { 
-                                Text(
-                                  "Season ${season.season_number}",
-                                  style = MaterialTheme.typography.bodyLarge
-                                ) 
-                              },
-                              onClick = {
-                                  onSelectSeason(season)
-                                  seasonDropdownExpanded.value = false
-                              }
-                          )
-                      }
-                  }
-                }
-
-                // Episode Dropdown
-                val episodeDropdownExpanded = remember { mutableStateOf(false) }
-                Box {
-                  FilledTonalButton(
-                      onClick = { episodeDropdownExpanded.value = true },
-                      enabled = selectedSeason != null && !isFetchingEpisodes,
-                      contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                      modifier = Modifier.height(38.dp),
-                      shape = RoundedCornerShape(8.dp)
-                  ) {
-                      if (isFetchingEpisodes) {
-                          CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp), 
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary
-                          )
-                          Spacer(Modifier.width(6.dp))
-                      }
-                      Text(
-                          text = selectedEpisode?.let { "E${it.episode_number}" } ?: "Ep",
-                          style = MaterialTheme.typography.labelLarge,
-                          fontWeight = FontWeight.Bold,
-                          maxLines = 1
-                      )
-                      Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(20.dp))
-                  }
-                  DropdownMenu(
-                      expanded = episodeDropdownExpanded.value,
-                      onDismissRequest = { episodeDropdownExpanded.value = false },
-                      modifier = Modifier.heightIn(max = 300.dp).widthIn(min = 200.dp),
-                      shape = RoundedCornerShape(12.dp),
-                      containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                  ) {
-                      episodes.forEach { episode ->
-                          DropdownMenuItem(
-                              text = { 
-                                Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                                  Text(
-                                    "Ep ${episode.episode_number}", 
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Bold
-                                  )
-                                  episode.name?.let { 
-                                    Text(
-                                      it, 
-                                      style = MaterialTheme.typography.bodySmall,
-                                      color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                      maxLines = 1,
-                                      modifier = Modifier.basicMarquee()
-                                    ) 
-                                  }
-                                }
-                              },
-                              onClick = {
-                                  onSelectEpisode(episode)
-                                  episodeDropdownExpanded.value = false
-                              }
-                          )
-                      }
-                  }
-                }
-
-                IconButton(
-                    onClick = onClose,
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(20.dp))
+            }
+            DropdownMenu(
+                expanded = seasonDropdownExpanded.value,
+                onDismissRequest = { seasonDropdownExpanded.value = false },
+                modifier = Modifier.heightIn(max = 300.dp),
+                shape = RoundedCornerShape(12.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            ) {
+                tvShow.seasons.forEach { season ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                "Season ${season.season_number}",
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                        },
+                        onClick = {
+                            onSelectSeason(season)
+                            seasonDropdownExpanded.value = false
+                        },
+                    )
                 }
             }
+        }
+
+        val episodeDropdownExpanded = remember { mutableStateOf(false) }
+        Box {
+            FilledTonalButton(
+                onClick = { episodeDropdownExpanded.value = true },
+                enabled = selectedSeason != null && !isFetchingEpisodes,
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                modifier = Modifier.height(48.dp).widthIn(min = 68.dp),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                if (isFetchingEpisodes) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
+                Text(
+                    text = selectedEpisode?.let { "E${it.episode_number}" } ?: "Ep",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                )
+                Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(20.dp))
+            }
+            DropdownMenu(
+                expanded = episodeDropdownExpanded.value,
+                onDismissRequest = { episodeDropdownExpanded.value = false },
+                modifier = Modifier.heightIn(max = 300.dp).widthIn(min = 200.dp),
+                shape = RoundedCornerShape(12.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            ) {
+                episodes.forEach { episode ->
+                    DropdownMenuItem(
+                        text = {
+                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                Text(
+                                    "Ep ${episode.episode_number}",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                episode.name?.let {
+                                    Text(
+                                        it,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        modifier = Modifier.basicMarquee(),
+                                    )
+                                }
+                            }
+                        },
+                        onClick = {
+                            onSelectEpisode(episode)
+                            episodeDropdownExpanded.value = false
+                        },
+                    )
+                }
+            }
+        }
+
+        IconButton(
+            onClick = onClose,
+            modifier = Modifier.size(40.dp),
+        ) {
+            Icon(Icons.Default.Close, null, modifier = Modifier.size(18.dp))
         }
     }
 }
