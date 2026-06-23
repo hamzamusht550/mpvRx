@@ -9,6 +9,7 @@ import app.gyrolet.mpvrx.di.PreferencesModule
 import app.gyrolet.mpvrx.presentation.crash.CrashActivity
 import app.gyrolet.mpvrx.presentation.crash.GlobalExceptionHandler
 import app.gyrolet.mpvrx.utils.media.MediaLibraryEvents
+import `is`.xyz.mpv.FastThumbnails
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -47,6 +48,8 @@ class App : Application() {
 
     Thread.setDefaultUncaughtExceptionHandler(GlobalExceptionHandler(applicationContext, CrashActivity::class.java))
 
+    FastThumbnails.initialize(this)
+    
     applicationScope.launch {
       runCatching {
         val preferences: PlayerPreferences = getKoin().get()
