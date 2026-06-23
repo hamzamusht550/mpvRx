@@ -267,10 +267,16 @@ class CoilVideoThumbnailDecoder(
   }
 
   private suspend fun generateMPVFastThumbnailWithSolidCheck(
-    path: String,
+    path: String?,
     totalDurationMillis: Long,
     frameAt: Float = 0.33f,
   ): Bitmap? {
+    // 1. Check if path is null or empty
+    if (path.isNullOrEmpty()) {
+      android.util.Log.w("generateMPVFastThumbnailWithSolidCheck", "Invalid path: path is null or empty")
+      return null
+    }
+
     val durationSec = (totalDurationMillis / 1000.0).coerceAtLeast(0.0)
   
     return try {
@@ -279,7 +285,8 @@ class CoilVideoThumbnailDecoder(
         return null
       }
       
-      val positionRatio = frameAt.takeIf { it > 0f } ?: 0.33f
+      // 2. Explicitly convert to Double so all math downstream results in Double
+      val positionRatio = (frameAt.takeIf { it > 0f } ?: 0.33f).toDouble()
   
       val base = (durationSec * positionRatio)
         .coerceIn(1.0, maxOf(1.0, durationSec - 1.0))
@@ -295,10 +302,11 @@ class CoilVideoThumbnailDecoder(
   
       var lastBitmap: Bitmap? = null
   
-      for (pos in candidates) {
+      // 3. Explicitly type 'pos' as Double
+      for (pos: Double in candidates) {
         val bmp = FastThumbnails.generateAsync(
           path,
-          pos,
+          pos, // Guaranteed to be Double here
           MAX_THUMBNAIL_SIZE,
           useHwDec = false
         ) ?: continue
@@ -340,48 +348,56 @@ class CoilVideoThumbnailDecoder(
   }
   
   private suspend fun generateMPVFastThumbnail(
-    path: String,
+    path: String?,
     totalDurationMillis: Long,
     frameAt: Float = 0.33f,
   ): Bitmap? {
+    // 1. Check if path is null or empty
+    if (path.isNullOrEmpty()) {
+      android.util.Log.w("generateMPVFastThumbnail", "Invalid path: path is null or empty")
+      return null
+    }
+
     val durationSec = (totalDurationMillis / 1000.0).coerceAtLeast(0.0)
   
     return try {
       if (durationSec <= 0.5) {
-        android.util.Log.w("generateMPVFastThumbnail", "MPV thumbnail failed: too short video For ${path}")
+        android.util.Log.w("generateMPVFastThumbnail", "MPV thumbnail failed: too short video For $path")
         return null
       }
       
-      val positionRatio = frameAt.takeIf { it > 0f } ?: 0.33f
+      // 2. Explicitly convert to Double so all math downstream results in Double
+      val positionRatio = (frameAt.takeIf { it > 0f } ?: 0.33f).toDouble()
   
       // ---- Deterministic pick (single frame only) ----
       val rawTarget = durationSec * positionRatio
   
-      val targetPosition = rawTarget
+      // 3. Explicitly type 'targetPosition' as Double
+      val targetPosition: Double = rawTarget
         .coerceAtLeast(1.0)                  // avoid black/intro frames
         .coerceAtMost(durationSec - 1.0)     // avoid end fade/black frame
   
       val bmp = FastThumbnails.generateAsync(
         path,
-        targetPosition,
+        targetPosition, // Guaranteed to be Double here
         MAX_THUMBNAIL_SIZE,
         useHwDec = false
       )
   
       if (bmp == null) {
-        android.util.Log.w("generateMPVFastThumbnail", "MPV thumbnail generation failed: null frame For ${path}")
+        android.util.Log.w("generateMPVFastThumbnail", "MPV thumbnail generation failed: null frame For $path")
         return null
       }
       
-      android.util.Log.w("generateMPVFastThumbnail", "MPV thumbnail generated successfully At ${targetPosition}s For ${path}")
+      android.util.Log.w("generateMPVFastThumbnail", "MPV thumbnail generated successfully At ${targetPosition}s For $path")
       bmp
   
     } catch (e: Throwable) {
-      android.util.Log.w("generateMPVFastThumbnail", "MPV thumbnail generation failed: ${e.message} For ${path}")
+      android.util.Log.w("generateMPVFastThumbnail", "MPV thumbnail generation failed: ${e.message} For $path")
       null
     }
   }
-
+  
   private suspend fun decodeWithSoftwareCodec(
     path: String,
     timeUs: Long,
