@@ -54,7 +54,7 @@ class ThumbnailRepository(
   private val ongoingOperations = ConcurrentHashMap<String, Deferred<Bitmap?>>()
   private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private val maxConcurrentFolders = 3
-  private val generationSemaphore = Semaphore(1)
+  private val generationSemaphore = Semaphore(4)
   private val maxFolderBatchSize = 48
   private val generationFrameDelayMs = 12L
 
@@ -146,7 +146,7 @@ class ThumbnailRepository(
         }
 
       ongoingOperations[key] = deferred
-      deferred.await()
+      return@withContext deferred.await()
     }
 
   suspend fun getCachedThumbnail(
